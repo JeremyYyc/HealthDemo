@@ -184,7 +184,7 @@ export function toAssessmentDto(assessment: SelectedAssessment): AssessmentDto {
   };
 }
 
-function sessionCookie(token: string, expiresAt: Date, secure: boolean): string {
+export function buildSessionCookie(token: string, expiresAt: Date, secure: boolean): string {
   return [
     `${SESSION_COOKIE_NAME}=${token}`,
     `Max-Age=${SESSION_LIFETIME_SECONDS}`,
@@ -276,7 +276,7 @@ export class SessionService {
     return {
       data: await this.sessionDto(created),
       status: 201,
-      cookie: sessionCookie(token, expiresAt, this.options.secureCookie),
+      cookie: buildSessionCookie(token, expiresAt, this.options.secureCookie),
     };
   }
 

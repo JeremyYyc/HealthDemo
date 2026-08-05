@@ -12,6 +12,8 @@
     "start": "next start",
     "prisma:generate": "prisma generate",
     "db:migrate": "prisma migrate deploy",
+    "demo:seed": "tsx scripts/demo-reset.ts",
+    "demo:reset": "tsx scripts/demo-reset.ts",
     "test": "vitest run --passWithNoTests --exclude 'tests/integration/**' --exclude 'tests/e2e/**'",
     "test:integration": "npm run prisma:generate && vitest run tests/integration",
     "test:e2e": "playwright test",

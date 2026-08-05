@@ -4,6 +4,7 @@ import { AssessmentStepService } from "../../services/assessment-step-service.js
 import { AssessmentCompletionService } from "../../services/assessment-completion-service.js";
 import { AssessmentResultService } from "../../services/assessment-result-service.js";
 import { DemoPaymentService } from "../../services/demo-payment-service.js";
+import { DemoExchangeService } from "../../services/demo-exchange-service.js";
 
 export const appBaseUrl = process.env.APP_BASE_URL ?? "http://localhost:3000";
 
@@ -39,5 +40,14 @@ export function getDemoPaymentService(): DemoPaymentService {
   return new DemoPaymentService(getPrismaClient(), {
     ...sessionRuntimeOptions(),
     audit: (entry) => console.info("demo_payment", entry),
+  });
+}
+
+export function getDemoExchangeService(): DemoExchangeService {
+  return new DemoExchangeService(getPrismaClient(), {
+    ...sessionRuntimeOptions(),
+    enabled: process.env.DEMO_EXCHANGE_ENABLED === "true",
+    ...(process.env.DEMO_REVIEW_CODE_HASH ? { reviewCodeHash: process.env.DEMO_REVIEW_CODE_HASH } : {}),
+    ...(process.env.DEMO_PAID_SESSION_TOKEN ? { paidSessionToken: process.env.DEMO_PAID_SESSION_TOKEN } : {}),
   });
 }
