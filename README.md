@@ -290,6 +290,8 @@ Every PR and push to `main` runs:
 5. A full API delivery smoke against a built local production server.
 6. `quality-gate`, which fails unless all five jobs succeeded.
 
+`main` branch protection enforces an up-to-date `quality-gate` plus `independent-agent-review` status bound to the current PR head SHA, applies to administrators, requires resolved review conversations, and forbids force pushes or deletion. Publish the review status only after an independent Agent approves that exact SHA; any later push invalidates it.
+
 Deployment is deliberately separate from Serverless startup. Required order:
 
 1. Apply migrations to a temporary database and deploy the exact commit to Preview.
