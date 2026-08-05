@@ -52,7 +52,7 @@ async function createPayment(
 
 beforeAll(async () => {
   execFileSync("npx", ["prisma", "migrate", "deploy"], {
-    env: { ...process.env, DATABASE_URL: migrationUrl.toString() },
+    env: { ...process.env, DATABASE_URL: migrationUrl.toString(), DIRECT_URL: migrationUrl.toString() },
     stdio: "pipe",
   });
   await client.connect();
@@ -439,7 +439,10 @@ describe("P0-01 database invariants", () => {
       execFileSync(
         "npx",
         ["prisma", "migrate", "resolve", "--applied", "20260805000000_baseline_schema"],
-        { env: { ...process.env, DATABASE_URL: legacyUrl.toString() }, stdio: "pipe" },
+        {
+          env: { ...process.env, DATABASE_URL: legacyUrl.toString(), DIRECT_URL: legacyUrl.toString() },
+          stdio: "pipe",
+        },
       );
 
       const session = await legacyClient.query<{ id: string }>(
@@ -479,7 +482,7 @@ describe("P0-01 database invariants", () => {
       expect(indexesBefore.rowCount).toBe(0);
 
       execFileSync("npx", ["prisma", "migrate", "deploy"], {
-        env: { ...process.env, DATABASE_URL: legacyUrl.toString() },
+        env: { ...process.env, DATABASE_URL: legacyUrl.toString(), DIRECT_URL: legacyUrl.toString() },
         stdio: "pipe",
       });
 

@@ -31,13 +31,22 @@ function parseCredentials(text: string): Credentials {
 function reset(): Credentials {
   resetOutput = execFileSync("npm", ["run", "demo:reset"], {
     cwd: process.cwd(), encoding: "utf8",
-    env: { ...process.env, DATABASE_URL: isolatedUrl.toString(), SESSION_TOKEN_SECRET: tokenSecret, DEMO_CREDENTIALS_FILE: credentialsFile },
+    env: {
+      ...process.env,
+      DATABASE_URL: isolatedUrl.toString(),
+      DIRECT_URL: isolatedUrl.toString(),
+      SESSION_TOKEN_SECRET: tokenSecret,
+      DEMO_CREDENTIALS_FILE: credentialsFile,
+    },
   });
   return parseCredentials(readFileSync(credentialsFile, "utf8"));
 }
 
 beforeAll(() => {
-  execFileSync("npx", ["prisma", "migrate", "deploy"], { env: { ...process.env, DATABASE_URL: isolatedUrl.toString() }, stdio: "pipe" });
+  execFileSync("npx", ["prisma", "migrate", "deploy"], {
+    env: { ...process.env, DATABASE_URL: isolatedUrl.toString(), DIRECT_URL: isolatedUrl.toString() },
+    stdio: "pipe",
+  });
   credentials = reset();
 });
 afterAll(async () => { await prisma.$disconnect(); await unlink(credentialsFile).catch(() => undefined); });
