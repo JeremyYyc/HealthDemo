@@ -250,5 +250,25 @@ describe("P0-02 anonymous Session and Assessment lifecycle", () => {
     );
     expect(invalidTarget.assessment.nextStep).toBe("TARGET_WEIGHT");
     expect(invalidTarget.assessment.completedSteps).not.toContain("TARGET_WEIGHT");
+
+    await prisma.assessment.update({
+      where: { id: entry.assessment.id },
+      data: { goal: "MAINTAIN_WEIGHT", heightCm: 140, weightKg: 30.2, targetWeightKg: 32.2 },
+    });
+    const exactMaintenanceBoundary = await dataOf<{
+      assessment: { nextStep: string; completedSteps: string[] };
+    }>(await routes.sessionGet(new Request(`${appBaseUrl}/api/session`, { headers: { cookie } })));
+    expect(exactMaintenanceBoundary.assessment.nextStep).toBe("COMPLETE");
+    expect(exactMaintenanceBoundary.assessment.completedSteps).toContain("TARGET_WEIGHT");
+
+    await prisma.assessment.update({
+      where: { id: entry.assessment.id },
+      data: { goal: "GAIN_WEIGHT", heightCm: 170, weightKg: 30.2, targetWeightKg: 56.2 },
+    });
+    const exact104Weeks = await dataOf<{ assessment: { nextStep: string; completedSteps: string[] } }>(
+      await routes.sessionGet(new Request(`${appBaseUrl}/api/session`, { headers: { cookie } })),
+    );
+    expect(exact104Weeks.assessment.nextStep).toBe("COMPLETE");
+    expect(exact104Weeks.assessment.completedSteps).toContain("TARGET_WEIGHT");
   });
 });

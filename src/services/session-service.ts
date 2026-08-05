@@ -104,15 +104,21 @@ function validTarget(assessment: SelectedAssessment): boolean {
   ) {
     return false;
   }
-  const difference = targetWeightKg - weightKg;
-  if (assessment.goal === "LOSE_WEIGHT" && difference >= 0) return false;
-  if (assessment.goal === "GAIN_WEIGHT" && difference <= 0) return false;
-  if (assessment.goal === "MAINTAIN_WEIGHT" && Math.abs(difference) > 2) return false;
-  const targetBmi = targetWeightKg / (heightCm / 100) ** 2;
-  if (targetBmi < 15 || targetBmi > 50) return false;
+  const weightHundredths = Math.round(weightKg * 100);
+  const targetWeightHundredths = Math.round(targetWeightKg * 100);
+  const differenceHundredths = targetWeightHundredths - weightHundredths;
+  if (assessment.goal === "LOSE_WEIGHT" && differenceHundredths >= 0) return false;
+  if (assessment.goal === "GAIN_WEIGHT" && differenceHundredths <= 0) return false;
+  if (assessment.goal === "MAINTAIN_WEIGHT" && Math.abs(differenceHundredths) > 200) return false;
+
+  const heightTenths = Math.round(heightCm * 10);
+  const targetWeightTenths = Math.round(targetWeightKg * 10);
+  const bmiNumerator = targetWeightTenths * 100_000;
+  const squaredHeightTenths = heightTenths ** 2;
+  if (bmiNumerator < 15 * squaredHeightTenths || bmiNumerator > 50 * squaredHeightTenths) return false;
   if (assessment.goal === "MAINTAIN_WEIGHT") return true;
-  const weeklyRate = assessment.goal === "LOSE_WEIGHT" ? 0.5 : 0.25;
-  return Math.ceil(Math.abs(difference) / weeklyRate) <= 104;
+  const weeklyRateHundredths = assessment.goal === "LOSE_WEIGHT" ? 50 : 25;
+  return Math.ceil(Math.abs(differenceHundredths) / weeklyRateHundredths) <= 104;
 }
 
 function answerEntries(assessment: SelectedAssessment): AnswerEntry[] {
