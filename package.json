@@ -1,0 +1,31 @@
+{
+  "name": "health-demo",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "scripts": {
+    "prisma:generate": "prisma generate",
+    "db:migrate": "prisma migrate deploy",
+    "test": "vitest run --passWithNoTests --exclude 'tests/integration/**'",
+    "test:integration": "vitest run tests/integration",
+    "typecheck": "tsc --noEmit",
+    "check": "npm run prisma:generate && npm run typecheck && npm test"
+  },
+  "dependencies": {
+    "@prisma/adapter-pg": "7.9.1",
+    "@prisma/client": "7.9.1",
+    "dotenv": "17.2.3",
+    "pg": "8.16.3"
+  },
+  "devDependencies": {
+    "@types/node": "24.10.1",
+    "@types/pg": "8.15.6",
+    "prisma": "7.9.1",
+    "tsx": "4.20.6",
+    "typescript": "5.9.3",
+    "vitest": "3.2.7"
+  }
+}
