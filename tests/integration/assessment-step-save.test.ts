@@ -85,20 +85,46 @@ async function responseError(response: Response) {
 
 describe("P0-03 PostgreSQL step saving", () => {
   it("P0-03-T01 rejects invalid updates without writes or version increments", async () => {
-    const context = await setup();
-    const response = await save(context, "height", { heightCm: 170.55, version: 0 });
-    expect(response.status).toBe(400);
-    const assessment = await prisma.assessment.findUniqueOrThrow({ where: { id: context.assessment.id } });
-    expect(assessment).toMatchObject({ heightCm: null, version: 0 });
+    const invalidCases = [
+      ["age-range", { ageRange: "17_29", version: 0 }],
+      ["sex", { sex: 7, version: 0 }],
+      ["goal", { goal: "SHRINK", version: 0 }],
+      ["age", { age: 17, version: 0 }],
+      ["height", { heightCm: 250.1, version: 0 }],
+      ["current-weight", { weightKg: 29.9, version: 0 }],
+      ["target-weight", { targetWeightKg: 350.1, version: 0 }],
+      ["activity", { activityLevel: "EXTREME", version: 0 }],
+    ] as const;
+    for (const [step, body] of invalidCases) {
+      const context = await setup();
+      const response = await save(context, step, body);
+      expect(response.status, step).toBe(400);
+      expect((await responseError(response)).code, step).toBe("VALIDATION_ERROR");
+      expect(
+        (await prisma.assessment.findUniqueOrThrow({ where: { id: context.assessment.id } })).version,
+        step,
+      ).toBe(0);
+    }
 
+    const precisionContext = await setup();
+    const precision = await save(precisionContext, "height", { heightCm: 170.55, version: 0 });
+    expect(precision.status).toBe(400);
+    expect((await responseError(precision)).code).toBe("VALIDATION_ERROR");
+    expect(
+      (await prisma.assessment.findUniqueOrThrow({ where: { id: precisionContext.assessment.id } })).version,
+    ).toBe(0);
+
+    const context = await setup();
     const other = await setup();
     const foreign = await context.patch(patchRequest({ sex: "FEMALE", version: 0 }, other.cookie), {
       params: Promise.resolve({ id: context.assessment.id, step: "sex" }),
     });
     expect(foreign.status).toBe(404);
+    expect((await responseError(foreign)).code).toBe("RESOURCE_NOT_FOUND");
     await prisma.assessment.update({ where: { id: context.assessment.id }, data: { status: "COMPLETED" } });
     const locked = await save(context, "sex", { sex: "FEMALE", version: 0 });
     expect(locked.status).toBe(409);
+    expect((await responseError(locked)).code).toBe("ASSESSMENT_LOCKED");
   });
 
   it("P0-03-T02 replays normalized same values before version checks and rejects stale different values", async () => {
@@ -111,7 +137,20 @@ describe("P0-03 PostgreSQL step saving", () => {
     expect(await responseData(replay)).toMatchObject({ version: 1, replayed: true });
     const conflict = await save(context, "height", { heightCm: 171, version: 0 });
     expect(conflict.status).toBe(409);
+    expect((await responseError(conflict)).code).toBe("VERSION_CONFLICT");
     expect((await prisma.assessment.findUniqueOrThrow({ where: { id: context.assessment.id } })).version).toBe(1);
+
+    const staleInvalidAge = await save(context, "age", { age: 35, version: 0 });
+    expect(staleInvalidAge.status).toBe(409);
+    expect((await responseError(staleInvalidAge)).code).toBe("VERSION_CONFLICT");
+
+    const targetContext = await setup();
+    await save(targetContext, "goal", { goal: "LOSE_WEIGHT", version: 0 });
+    await save(targetContext, "height", { heightCm: 170, version: 1 });
+    await save(targetContext, "current-weight", { weightKg: 80, version: 2 });
+    const staleInvalidTarget = await save(targetContext, "target-weight", { targetWeightKg: 85, version: 0 });
+    expect(staleInvalidTarget.status).toBe(409);
+    expect((await responseError(staleInvalidTarget)).code).toBe("VERSION_CONFLICT");
   });
 
   it("P0-03-T03 invalidates age in the same versioned update when ageRange changes", async () => {
@@ -207,6 +246,21 @@ describe("P0-03 PostgreSQL step saving", () => {
     );
     expect(await responseData(restored)).toMatchObject({
       assessment: { answers: { ageRange: "18_29", heightCm: 100, weightKg: 30 } },
+    });
+
+    const maximum = await setup();
+    const maximumHeightCm = imperialHeightToCm(8, 2.4251968504);
+    const maximumWeightKg = poundsToKg(771.6179176471);
+    expect((await save(maximum, "height", { heightCm: maximumHeightCm, version: 0 })).status).toBe(200);
+    expect((await save(maximum, "current-weight", { weightKg: maximumWeightKg, version: 1 })).status).toBe(200);
+    const maximumStored = await prisma.assessment.findUniqueOrThrow({ where: { id: maximum.assessment.id } });
+    expect(maximumStored.heightCm?.toNumber()).toBe(250);
+    expect(maximumStored.weightKg?.toNumber()).toBe(350);
+    const maximumRestored = await maximum.sessionGet(
+      new Request(`${appBaseUrl}/api/session`, { headers: { cookie: maximum.cookie } }),
+    );
+    expect(await responseData(maximumRestored)).toMatchObject({
+      assessment: { answers: { ageRange: "18_29", heightCm: 250, weightKg: 350 } },
     });
   });
 });

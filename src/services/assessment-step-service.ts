@@ -60,7 +60,7 @@ function targetInputs(assessment: AssessmentRecord, submission: StepSubmission) 
   };
 }
 
-function buildPlan(assessment: AssessmentRecord, submission: StepSubmission) {
+function validateBusinessRules(assessment: AssessmentRecord, submission: StepSubmission) {
   if (submission.field === "age") {
     if (assessment.ageRange === null) {
       throw new ApiError("STEP_PREREQUISITE_MISSING", {
@@ -92,7 +92,10 @@ function buildPlan(assessment: AssessmentRecord, submission: StepSubmission) {
       });
     }
   }
+}
 
+function buildPlan(assessment: AssessmentRecord, submission: StepSubmission) {
+  const projectedTarget = targetInputs(assessment, submission);
   const data: Record<string, string | number | null | { increment: number }> = {
     [submission.field]: databaseValue(submission),
     version: { increment: 1 },
@@ -160,6 +163,7 @@ export class AssessmentStepService {
         };
       }
       if (assessment.version !== submission.version) throw new ApiError("VERSION_CONFLICT");
+      validateBusinessRules(assessment, submission);
 
       const updated = await transaction.assessment.updateMany({
         where: { id: assessmentId, sessionId, status: "IN_PROGRESS", version: submission.version },
