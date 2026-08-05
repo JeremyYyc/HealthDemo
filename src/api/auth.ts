@@ -62,8 +62,15 @@ export async function requireSession(
   return session;
 }
 
-export async function requireOwnedResource<T>(loadOwned: () => Promise<T | null>): Promise<T> {
-  const resource = await loadOwned();
+export interface OwnedResourceLookup<T> {
+  findOwned(input: { resourceId: string; sessionId: string }): Promise<T | null>;
+}
+
+export async function requireOwnedResource<T>(
+  resources: OwnedResourceLookup<T>,
+  input: { resourceId: string; sessionId: string },
+): Promise<T> {
+  const resource = await resources.findOwned(input);
   if (!resource) throw new ApiError("RESOURCE_NOT_FOUND");
   return resource;
 }

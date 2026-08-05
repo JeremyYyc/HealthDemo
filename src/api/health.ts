@@ -1,6 +1,6 @@
 import type { PrismaClient } from "../generated/prisma/client.js";
 import { ApiError } from "./errors.js";
-import { handleApiRequest, successResponse, type SafeLogger } from "./http.js";
+import { apiSuccess, handleApiRequest, type SafeLogger } from "./http.js";
 
 export interface DatabaseHealthProbe {
   check(): Promise<void>;
@@ -29,10 +29,7 @@ export function createHealthRoute(options: {
         } catch {
           throw new ApiError("SERVICE_UNAVAILABLE");
         }
-        return successResponse(
-          { status: "ok", database: "reachable", appVersion: options.appVersion },
-          context,
-        );
+        return apiSuccess({ status: "ok", database: "reachable", appVersion: options.appVersion });
       },
       {
         ...(options.createRequestId ? { createRequestId: options.createRequestId } : {}),

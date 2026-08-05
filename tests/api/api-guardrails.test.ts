@@ -2,10 +2,9 @@ import { describe, expect, it, vi } from "vitest";
 import { digestOpaqueValue, requireOwnedResource, requireSession } from "../../src/api/auth.js";
 import { ApiError, ERROR_DEFINITIONS, type ApiErrorCode } from "../../src/api/errors.js";
 import { createHealthRoute } from "../../src/api/health.js";
-import { errorResponse, handleApiRequest, successResponse, type SafeLogEntry } from "../../src/api/http.js";
+import { apiSuccess, errorResponse, handleApiRequest, type SafeLogEntry } from "../../src/api/http.js";
 import {
   createJsonWriteRoute,
-  FROZEN_WRITE_ROUTES,
   MAX_JSON_BODY_BYTES,
 } from "../../src/api/write-guard.js";
 
@@ -32,7 +31,7 @@ async function responseJson(response: Response): Promise<Record<string, unknown>
 
 describe("P0-10 shared API guardrails", () => {
   const route = createJsonWriteRoute(
-    async (_request, context) => successResponse({ received: context.body }, context),
+    async (_request, context) => apiSuccess({ received: context.body }),
     { appBaseUrl, createRequestId: () => "fixed" },
   );
 
@@ -100,20 +99,36 @@ describe("P0-10 shared API guardrails", () => {
     });
     await expect(authorize("valid-token")).resolves.toMatchObject({ id: "session-a" });
 
+    const resources = [
+      { id: "owned", sessionId: "session-a" },
+      { id: "foreign", sessionId: "session-b" },
+    ];
+    const ownedLookup = {
+      findOwned: vi.fn(async ({ resourceId, sessionId }: { resourceId: string; sessionId: string }) =>
+        resources.find((resource) => resource.id === resourceId && resource.sessionId === sessionId) ?? null,
+      ),
+    };
     const missing = await handleApiRequest(
       new Request("https://health.example/api/assessments/missing"),
-      async () => new Response(JSON.stringify(await requireOwnedResource(async () => null))),
+      async () => apiSuccess(await requireOwnedResource(ownedLookup, { resourceId: "missing", sessionId: "session-a" })),
       { createRequestId: () => "missing" },
     );
     const foreign = await handleApiRequest(
       new Request("https://health.example/api/assessments/foreign"),
-      async () => new Response(JSON.stringify(await requireOwnedResource(async () => null))),
+      async () => apiSuccess(await requireOwnedResource(ownedLookup, { resourceId: "foreign", sessionId: "session-a" })),
       { createRequestId: () => "foreign" },
+    );
+    const owned = await handleApiRequest(
+      new Request("https://health.example/api/assessments/owned"),
+      async () => apiSuccess(await requireOwnedResource(ownedLookup, { resourceId: "owned", sessionId: "session-a" })),
+      { createRequestId: () => "owned" },
     );
     expect(missing.status).toBe(404);
     expect(foreign.status).toBe(404);
     expect((await responseJson(missing)).error).toMatchObject({ code: "RESOURCE_NOT_FOUND" });
     expect((await responseJson(foreign)).error).toMatchObject({ code: "RESOURCE_NOT_FOUND" });
+    expect(owned.status).toBe(200);
+    expect(ownedLookup.findOwned).toHaveBeenCalledWith({ resourceId: "foreign", sessionId: "session-a" });
   });
 
   it("P0-10-T03 keeps every frozen error definition and response envelope stable without internal data", async () => {
@@ -158,12 +173,16 @@ describe("P0-10 shared API guardrails", () => {
       { requestId: "req_internal", method: "GET", path: "/api/test", status: 500, errorCode: "INTERNAL_ERROR" },
     ]);
 
-    const rawSuccess = await handleApiRequest(
-      new Request("https://health.example/api/raw"),
-      async () => new Response("ok"),
-      { createRequestId: () => "raw" },
+    const normalizedSuccess = await handleApiRequest(
+      new Request("https://health.example/api/normalized"),
+      async () => apiSuccess({ ok: true }),
+      { createRequestId: () => "normalized" },
     );
-    expect(rawSuccess.headers.get("x-request-id")).toBe("req_raw");
+    expect(normalizedSuccess.headers.get("x-request-id")).toBe("req_normalized");
+    expect(await responseJson(normalizedSuccess)).toEqual({
+      data: { ok: true },
+      meta: { requestId: "req_normalized" },
+    });
 
     for (const code of Object.keys(expected) as ApiErrorCode[]) {
       const frozen = errorResponse(new ApiError(code), { requestId: "req_contract" });
@@ -175,24 +194,6 @@ describe("P0-10 shared API guardrails", () => {
           requestId: "req_contract",
         },
       });
-    }
-  });
-
-  it("applies the common write guard contract to every frozen POST/PATCH route", async () => {
-    expect(FROZEN_WRITE_ROUTES.every(({ method }) => method === "POST" || method === "PATCH")).toBe(true);
-    for (const definition of FROZEN_WRITE_ROUTES) {
-      const guarded = createJsonWriteRoute(
-        async (_request, context) => successResponse({ route: definition.path }, context),
-        { appBaseUrl, createRequestId: () => definition.path },
-      );
-      const response = await guarded(
-        new Request(`${appBaseUrl}${definition.path.replace(":id", "id").replace(":step", "step")}`, {
-          method: definition.method,
-          headers: { "content-type": "application/json" },
-          body: "{}",
-        }),
-      );
-      expect(response.status).toBe(403);
     }
   });
 

@@ -15,9 +15,23 @@ export interface SafeLogEntry {
 
 export type SafeLogger = (entry: SafeLogEntry) => void;
 
-export type ApiHandler = (request: Request, context: RequestContext) => Promise<Response>;
-
 type ResponseHeaders = Headers | Readonly<Record<string, string>>;
+
+export interface ApiSuccess<T = unknown> {
+  data: T;
+  status?: number;
+  headers?: ResponseHeaders;
+}
+
+export type ApiHandler = (request: Request, context: RequestContext) => Promise<ApiSuccess>;
+
+export function apiSuccess<T>(data: T, options: { status?: number; headers?: ResponseHeaders } = {}): ApiSuccess<T> {
+  return {
+    data,
+    ...(options.status === undefined ? {} : { status: options.status }),
+    ...(options.headers === undefined ? {} : { headers: options.headers }),
+  };
+}
 
 function jsonResponse(body: unknown, status: number, requestId: string, headers?: ResponseHeaders): Response {
   const responseHeaders = new Headers(headers);
@@ -26,7 +40,7 @@ function jsonResponse(body: unknown, status: number, requestId: string, headers?
   return new Response(JSON.stringify(body), { status, headers: responseHeaders });
 }
 
-export function successResponse<T>(data: T, context: RequestContext, status = 200, headers?: ResponseHeaders): Response {
+function successResponse<T>(data: T, context: RequestContext, status = 200, headers?: ResponseHeaders): Response {
   return jsonResponse({ data, meta: { requestId: context.requestId } }, status, context.requestId, headers);
 }
 
@@ -56,20 +70,11 @@ export async function handleApiRequest(
   let response: Response;
   let errorCode: ApiErrorCode | undefined;
   try {
-    response = await handler(request, context);
+    const result = await handler(request, context);
+    response = successResponse(result.data, context, result.status ?? 200, result.headers);
   } catch (error) {
     errorCode = error instanceof ApiError ? error.code : "INTERNAL_ERROR";
     response = errorResponse(error, context);
-  }
-
-  if (response.headers.get("x-request-id") !== context.requestId) {
-    const headers = new Headers(response.headers);
-    headers.set("x-request-id", context.requestId);
-    response = new Response(response.body, {
-      status: response.status,
-      statusText: response.statusText,
-      headers,
-    });
   }
 
   options.logger?.({

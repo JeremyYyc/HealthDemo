@@ -87,10 +87,29 @@ describe("P0-10 PostgreSQL-backed API infrastructure", () => {
       buckets: await firstClient.rateLimitBucket.count(),
     };
     await new PrismaDatabaseHealthProbe(firstClient).check();
+    const previousDatabaseUrl = process.env.DATABASE_URL;
+    let mountedResponse: Response;
+    try {
+      process.env.DATABASE_URL = isolatedUrl.toString();
+      const [{ GET }, { getPrismaClient }] = await Promise.all([
+        import("../../app/api/health/route.js"),
+        import("../../src/database/prisma.js"),
+      ]);
+      mountedResponse = await GET(new Request("http://localhost:3000/api/health"));
+      await getPrismaClient().$disconnect();
+    } finally {
+      if (previousDatabaseUrl === undefined) delete process.env.DATABASE_URL;
+      else process.env.DATABASE_URL = previousDatabaseUrl;
+    }
     const after = {
       sessions: await firstClient.session.count(),
       buckets: await firstClient.rateLimitBucket.count(),
     };
+    expect(mountedResponse.status).toBe(200);
+    expect(await mountedResponse.json()).toMatchObject({
+      data: { status: "ok", database: "reachable" },
+      meta: { requestId: expect.stringMatching(/^req_/) },
+    });
     expect(after).toEqual(before);
   });
 });

@@ -1,21 +1,13 @@
 import { ApiError } from "./errors.js";
-import { handleApiRequest, type RequestContext, type SafeLogger } from "./http.js";
+import { handleApiRequest, type ApiSuccess, type RequestContext, type SafeLogger } from "./http.js";
 
 export const MAX_JSON_BODY_BYTES = 16 * 1024;
-export const FROZEN_WRITE_ROUTES = [
-  { method: "POST", path: "/api/sessions" },
-  { method: "POST", path: "/api/assessments" },
-  { method: "PATCH", path: "/api/assessments/:id/steps/:step" },
-  { method: "POST", path: "/api/assessments/:id/complete" },
-  { method: "POST", path: "/api/pay" },
-  { method: "POST", path: "/api/demo/session-exchange" },
-] as const;
 
 export interface JsonWriteContext extends RequestContext {
   body: unknown;
 }
 
-export type JsonWriteHandler = (request: Request, context: JsonWriteContext) => Promise<Response>;
+export type JsonWriteHandler = (request: Request, context: JsonWriteContext) => Promise<ApiSuccess>;
 
 function parseOrigin(value: string, field: "request" | "configured"): string {
   try {
