@@ -67,3 +67,28 @@ curl --fail-with-body \
 ```
 
 The exchange response and URL contain no Session token. Run `npm run demo:reset` again to replace the synthetic records and rotate every credential; the previous review code and cookies then stop working. Ordinary assessment and Demo payment flows do not depend on this endpoint.
+
+## Demo data retention and purge
+
+Anonymous Sessions expire 30 days after creation and remain eligible for audit/recovery for at most 7 additional days. The versioned purge uses `Session.expiresAt <= calculationTime - 7 days`; it never prints tokens, record IDs, or health fields. Dry-run is the default and does not write to the database:
+
+```bash
+npm run data:purge-expired
+```
+
+Use a fixed UTC time when an operator or CI run must be reproducible:
+
+```bash
+npm run data:purge-expired -- --calculation-time=2026-08-05T00:00:00.000Z
+```
+
+Formal deletion requires both explicit flags:
+
+```bash
+npm run data:purge-expired -- \
+  --calculation-time=2026-08-05T00:00:00.000Z \
+  --execute \
+  --confirm=PURGE_EXPIRED_DATA
+```
+
+During a public review, the deployment owner runs and records the single-line JSON summary for dry-run and execute at least every 7 days. Run and record one final pair immediately after the review ends. The audit record contains only the command version, UTC calculation/cutoff times, mode, outcome, and aggregate candidate/deleted counts. A failed execute exits `1` and rolls back; invalid or unconfirmed usage exits `2`. Investigate failures before retrying—never use a production database reset as a substitute.
