@@ -268,7 +268,7 @@ npx playwright install chromium webkit
 
 npm test
 npm run test:integration
-E2E_REAL_BACKEND=true DATABASE_URL="${TEST_DATABASE_URL}" \
+E2E_REAL_BACKEND=true DATABASE_URL="${TEST_DATABASE_URL}" DIRECT_URL="${TEST_DATABASE_URL}" \
   APP_BASE_URL="http://127.0.0.1:3100" SESSION_COOKIE_SECURE=false \
   npm run test:e2e
 npm run test:coverage
