@@ -24,6 +24,7 @@ interface CompletionOptions {
   secureCookie: boolean;
   now?: () => Date;
   calculate?: (input: HealthCalculationInput) => HealthCalculationResult;
+  beforeResultCreated?: () => void | Promise<void>;
   afterResultCreated?: () => void | Promise<void>;
 }
 
@@ -101,11 +102,8 @@ export class AssessmentCompletionService {
     try {
       return await this.prisma.$transaction(async (transaction) => {
         await transaction.$queryRaw`
-          SELECT id
-          FROM assessments
-          WHERE id = CAST(${assessmentId} AS uuid)
-            AND session_id = CAST(${sessionId} AS uuid)
-          FOR UPDATE
+          SELECT 1 AS locked
+          FROM pg_advisory_xact_lock(hashtextextended(${assessmentId}, 0))
         `;
         const assessment = await transaction.assessment.findFirst({ where: { id: assessmentId, sessionId } });
         if (!assessment) throw new ApiError("RESOURCE_NOT_FOUND");
@@ -115,6 +113,7 @@ export class AssessmentCompletionService {
         const calculated = (this.options.calculate ?? calculateHealthResult)(
           calculationInput(assessment, calculationDate),
         );
+        await this.options.beforeResultCreated?.();
         await transaction.assessmentResult.create({
           data: {
             assessmentId,

@@ -264,6 +264,63 @@ describe("P0-06 PostgreSQL completion transaction", () => {
       version: version + 1,
     });
     expect(await prisma.assessmentResult.count({ where: { assessmentId: context.assessment.id } })).toBe(1);
+
+    const uniqueConflict = await setup();
+    const uniqueVersion = await fill(uniqueConflict);
+    let injected = false;
+    const recovered = await complete(
+      uniqueConflict,
+      uniqueVersion,
+      completeRoute({
+        tokenSecret,
+        secureCookie: false,
+        now: () => fixedNow,
+        beforeResultCreated: async () => {
+          if (injected) return;
+          injected = true;
+          const calculated = calculateHealthResult({
+            ageRange: "30_39",
+            sex: "FEMALE",
+            goal: "LOSE_WEIGHT",
+            age: 35,
+            heightCm: 170,
+            weightKg: 80,
+            targetWeightKg: 70,
+            activityLevel: "MODERATE",
+            calculationDate: "2026-08-05",
+          });
+          await prisma.$transaction(async (transaction) => {
+            await transaction.assessmentResult.create({
+              data: {
+                assessmentId: uniqueConflict.assessment.id,
+                bmi: calculated.bmi,
+                bmiCategory: calculated.bmiCategory,
+                bmrKcal: calculated.bmrKcal,
+                tdeeKcal: calculated.tdeeKcal,
+                recommendedCaloriesKcal: calculated.recommendedCaloriesKcal,
+                targetDate: new Date(`${calculated.targetDate}T00:00:00.000Z`),
+                calculationDate: new Date("2026-08-05T00:00:00.000Z"),
+                estimatedWeeks: calculated.estimatedWeeks,
+                predictionCurve: calculated.predictionCurve.map((point) => ({ ...point })),
+                calorieFloorApplied: calculated.calorieFloorApplied,
+                algorithmVersion: calculated.algorithmVersion,
+              },
+            });
+            await transaction.assessment.update({
+              where: { id: uniqueConflict.assessment.id },
+              data: { status: "COMPLETED", completedAt: fixedNow, version: { increment: 1 } },
+            });
+          });
+        },
+      }),
+    );
+    expect(recovered.status).toBe(200);
+    expect(await data(recovered)).toMatchObject({
+      assessmentId: uniqueConflict.assessment.id,
+      version: uniqueVersion + 1,
+      replayed: true,
+    });
+    expect(await prisma.assessmentResult.count({ where: { assessmentId: uniqueConflict.assessment.id } })).toBe(1);
   });
 
   it("P0-06-T06 replays completed metadata, ignores stale versions, and never embeds Result fields", async () => {
