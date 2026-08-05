@@ -42,6 +42,9 @@ test("P0-04 real T01/T02 uses the session cookie, saves all steps, and restores 
   await choose(page, "Exercise 3–5 days/week", "Generate my summary");
   await expect(page).toHaveURL(/\/result$/);
   await expect(page.getByRole("heading", { name: "Your free health summary is ready." })).toBeVisible();
+  await page.getByRole("button", { name: "Demo Unlock full report" }).click();
+  await expect(page.getByRole("heading", { name: "Your full health report is ready." })).toBeVisible();
+  await expect(page.getByText(/kcal/).first()).toBeVisible();
 });
 
 test("P0-04 real T03 returns server business errors and retries the same valid input after a transport failure", async ({ page }) => {

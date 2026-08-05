@@ -43,6 +43,9 @@ export default function ResultPage() {
   const [resultError, setResultError] = useState<ClientApiError | null>(null);
   const [resultLoading, setResultLoading] = useState(false);
   const [unlockNote, setUnlockNote] = useState("");
+  const [paying, setPaying] = useState(false);
+  const [paymentError, setPaymentError] = useState("");
+  const paymentKeyRef = useRef<string | null>(null);
   const [starting, setStarting] = useState(false);
   const [startError, setStartError] = useState("");
   const startingRef = useRef(false);
@@ -65,17 +68,42 @@ export default function ResultPage() {
     setResultError(null);
     try {
       setResult(await apiRequest<AssessmentResultDto>(`/api/assessments/${assessmentId}/result`));
+      return true;
     } catch (caught) {
       const apiError = caught instanceof ClientApiError
         ? caught
         : new ClientApiError("UNEXPECTED_ERROR", "The result could not be loaded.", [], "client", 0);
-      setResult(null);
       setResultError(apiError);
       if (apiError.code === "SESSION_REQUIRED") router.replace(hasSeenSession() ? "/?lost=1" : "/");
+      return false;
     } finally {
       setResultLoading(false);
     }
   }, [assessmentId, router]);
+
+  async function unlock() {
+    if (!assessmentId || paying) return;
+    paymentKeyRef.current ??= `demo_${crypto.randomUUID()}`;
+    setPaying(true);
+    setPaymentError("");
+    setUnlockNote("");
+    try {
+      await apiRequest("/api/pay", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ assessmentId, idempotencyKey: paymentKeyRef.current }),
+      });
+      if (await loadResult()) {
+        setUnlockNote("Demo payment completed. Your report was refreshed from the protected result API.");
+      } else {
+        setPaymentError("Demo payment completed, but the full report could not be refreshed. Retry to fetch it again.");
+      }
+    } catch (caught) {
+      setPaymentError(caught instanceof ClientApiError ? caught.message : "The Demo payment could not be completed.");
+    } finally {
+      setPaying(false);
+    }
+  }
 
   useEffect(() => {
     void loadResult();
@@ -118,9 +146,10 @@ export default function ResultPage() {
         <p className="lede">{result.summary}</p>
         <p className="disclaimer">{result.disclaimer}</p>
         {startError ? <p className="error-banner" role="alert">{startError}</p> : null}
+        {paymentError ? <p className="error-banner" role="alert">{paymentError}</p> : null}
         {unlockNote ? <p className="notice-banner" role="status">{unlockNote}</p> : null}
         <div className="result-actions">
-          {!full ? <button className="primary-button" type="button" onClick={() => setUnlockNote("Demo payment is the next step. Your free result remains available.")}>Demo Unlock full report</button> : null}
+          {!full ? <button className="primary-button" type="button" disabled={paying} onClick={() => void unlock()}>{paying ? "Processing Demo payment…" : paymentError ? "Retry Demo Unlock" : "Demo Unlock full report"}</button> : null}
           <button className="secondary-button" type="button" disabled={starting} onClick={() => void startNew()}>{starting ? "Starting…" : startError ? "Retry new assessment" : "Start a new assessment"}</button>
         </div>
       </section>
