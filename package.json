@@ -14,6 +14,7 @@
     "db:migrate": "prisma migrate deploy",
     "demo:seed": "tsx scripts/demo-reset.ts",
     "demo:reset": "tsx scripts/demo-reset.ts",
+    "data:purge-expired": "tsx scripts/data-purge-expired-v1.ts",
     "test": "vitest run --passWithNoTests --exclude 'tests/integration/**' --exclude 'tests/e2e/**'",
     "test:integration": "npm run prisma:generate && vitest run tests/integration",
     "test:e2e": "playwright test",
