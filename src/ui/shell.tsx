@@ -29,3 +29,14 @@ export function LoadingCard({ label = "Restoring your assessment…" }: { label?
     </div>
   );
 }
+
+export function SessionFailure({ message, retry }: { message: string; retry: () => void }) {
+  return (
+    <section className="card centered" aria-labelledby="session-failure-title">
+      <p className="eyebrow">Connection interrupted</p>
+      <h1 id="session-failure-title">We couldn’t restore your assessment</h1>
+      <p className="error-banner" role="alert">{message}</p>
+      <button className="primary-button" type="button" onClick={retry}>Retry</button>
+    </section>
+  );
+}

@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 import { useParams, useRouter } from "next/navigation.js";
-import { LoadingCard, PageShell } from "../../../src/ui/shell.js";
+import { LoadingCard, PageShell, SessionFailure } from "../../../src/ui/shell.js";
 import { guardPath, hasSeenSession, STEP_NAMES, STEP_SLUG_BY_NAME, type StepSlug } from "../../../src/ui/session.js";
 import { useSession } from "../../../src/ui/use-session.js";
 import { QuizStep } from "../../../src/ui/quiz-step.js";
@@ -29,7 +29,8 @@ export default function QuizPage() {
     if (!loading && error?.code === "SESSION_REQUIRED") router.replace(hasSeenSession() ? "/?lost=1" : "/");
   }, [error, loading, router]);
 
-  if (loading || !session || !step) return <PageShell narrow><LoadingCard /></PageShell>;
+  if (loading || !step) return <PageShell narrow><LoadingCard /></PageShell>;
+  if (!session) return <PageShell narrow><SessionFailure message={error?.message ?? "The session could not be restored."} retry={() => void refresh()} /></PageShell>;
   const stepName = STEP_NAMES.find((name) => STEP_SLUG_BY_NAME[name] === step)!;
   return (
     <PageShell narrow>

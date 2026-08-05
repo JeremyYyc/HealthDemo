@@ -65,6 +65,7 @@ export function QuizStep({ session, step, stepName, refresh }: {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [retryAfter, setRetryAfter] = useState(0);
+  const [retryable, setRetryable] = useState(false);
   const position = STEP_NAMES.indexOf(stepName);
   const copy = COPY[step];
   const options = OPTIONS[step];
@@ -113,7 +114,7 @@ export function QuizStep({ session, step, stepName, refresh }: {
   async function submit(event: FormEvent) {
     event.preventDefault();
     if (saving) return;
-    setSaving(true); setError(""); setNotice("");
+    setSaving(true); setError(""); setNotice(""); setRetryable(false);
     const measurement = step === "height" || step === "current-weight" || step === "target-weight";
     const submittedValue = numeric
       ? measurement && normalizedMetric !== null
@@ -133,7 +134,12 @@ export function QuizStep({ session, step, stepName, refresh }: {
         if (latest) {
           const latestValue = latest.assessment.answers[field];
           setNotice("This answer changed in another tab. Review the latest value before saving again.");
-          if (latestValue !== undefined) { setValue(String(latestValue)); setUnit("metric"); setInches("0"); }
+          if (latestValue !== undefined) {
+            setValue(String(latestValue)); setUnit("metric"); setInches("0");
+            if (typeof latestValue === "number" && (step === "height" || step === "current-weight" || step === "target-weight")) {
+              setNormalizedMetric(latestValue);
+            }
+          }
         }
       } else if (apiError?.code === "SESSION_REQUIRED") {
         router.replace("/?lost=1");
@@ -147,6 +153,7 @@ export function QuizStep({ session, step, stepName, refresh }: {
         setRetryAfter(seconds);
         setError(`Too many requests. You can retry in ${seconds} seconds.`);
       } else {
+        setRetryable(apiError === null || apiError.status === 0 || apiError.status >= 500);
         setError(apiError?.details[0]?.reason ?? apiError?.message ?? "Your answer could not be saved. Please retry.");
       }
     } finally { setSaving(false); }
@@ -183,7 +190,7 @@ export function QuizStep({ session, step, stepName, refresh }: {
         )}
         {error ? <p id="field-error" className="error-banner" role="alert">{error}</p> : null}
         {notice ? <p className="notice-banner" role="status">{notice}</p> : null}
-        <div className="form-actions"><Link className="back-link" href={previous}>← Back</Link><button className="primary-button" type="submit" disabled={saving || retryAfter > 0 || value === ""}>{saving ? "Saving…" : retryAfter > 0 ? `Retry in ${retryAfter}s` : position === 7 ? "Generate my summary" : "Continue"}</button></div>
+        <div className="form-actions"><Link className="back-link" href={previous}>← Back</Link><button className="primary-button" type="submit" disabled={saving || retryAfter > 0 || value === ""}>{saving ? "Saving…" : retryAfter > 0 ? `Retry in ${retryAfter}s` : retryable ? "Retry" : position === 7 ? "Generate my summary" : "Continue"}</button></div>
       </form>
     </div>
   );

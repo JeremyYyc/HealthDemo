@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation.js";
-import { LoadingCard, PageShell } from "../src/ui/shell.js";
+import { LoadingCard, PageShell, SessionFailure } from "../src/ui/shell.js";
 import {
   apiRequest,
   ClientApiError,
@@ -22,7 +22,7 @@ const AGE_RANGES = [
 
 export default function WelcomePage() {
   const router = useRouter();
-  const { session, error, loading } = useSession();
+  const { session, error, loading, refresh } = useSession();
   const [confirmedLoss, setConfirmedLoss] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
@@ -53,6 +53,9 @@ export default function WelcomePage() {
   }
 
   if (loading || session) return <PageShell narrow><LoadingCard /></PageShell>;
+  if (error && error.code !== "SESSION_REQUIRED") {
+    return <PageShell narrow><SessionFailure message={error.message} retry={() => void refresh()} /></PageShell>;
+  }
   const lost = error?.code === "SESSION_REQUIRED" && hasSeenSession() && !confirmedLoss;
 
   return (

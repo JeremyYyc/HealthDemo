@@ -45,16 +45,23 @@ function json(route: Route, status: number, body: unknown) {
 async function mockFunnel(
   page: Page,
   initial: MockState | null,
-  options: { failValidTargetOnce?: boolean; conflictStepOnce?: string } = {},
+  options: { failValidTargetOnce?: boolean; conflictStepOnce?: string; conflictValue?: string | number; failSessionOnce?: boolean; failNewAssessmentOnce?: boolean } = {},
 ) {
   let state = initial;
   let validTargetFailed = false;
   let conflictSent = false;
+  let sessionFailed = false;
+  let newAssessmentFailed = false;
+  let newAssessmentRequests = 0;
   const submittedBodies: Record<string, unknown>[] = [];
   await page.route("**/api/**", async (route) => {
     const request = route.request();
     const path = new URL(request.url()).pathname;
     if (path === "/api/session") {
+      if (options.failSessionOnce && !sessionFailed) {
+        sessionFailed = true;
+        return json(route, 503, { error: { code: "SERVICE_UNAVAILABLE", message: "The service is unavailable.", details: [], requestId: "req_e2e" } });
+      }
       return state
         ? json(route, 200, { data: state, meta: { requestId: "req_e2e" } })
         : json(route, 401, { error: { code: "SESSION_REQUIRED", message: "A valid session is required.", details: [], requestId: "req_e2e" } });
@@ -64,6 +71,15 @@ async function mockFunnel(
       state = stateAt("SEX", { ageRange });
       return json(route, 201, { data: state, meta: { requestId: "req_e2e" } });
     }
+    if (path === "/api/assessments" && request.method() === "POST" && state) {
+      newAssessmentRequests += 1;
+      if (options.failNewAssessmentOnce && !newAssessmentFailed) {
+        newAssessmentFailed = true;
+        return json(route, 503, { error: { code: "SERVICE_UNAVAILABLE", message: "The service is unavailable.", details: [], requestId: "req_e2e" } });
+      }
+      state = stateAt("AGE_RANGE", {});
+      return json(route, 201, { data: { ...state.assessment, created: true }, meta: { requestId: "req_e2e" } });
+    }
     const stepMatch = path.match(/^\/api\/assessments\/[^/]+\/steps\/(.+)$/);
     if (stepMatch && request.method() === "PATCH" && state) {
       const slug = stepMatch[1]!;
@@ -72,7 +88,7 @@ async function mockFunnel(
       submittedBodies.push(body);
       if (slug === options.conflictStepOnce && !conflictSent) {
         conflictSent = true;
-        state.assessment.answers[FIELDS[index]!] = slug === "sex" ? "MALE" : body[FIELDS[index]!]!;
+        state.assessment.answers[FIELDS[index]!] = options.conflictValue ?? (slug === "sex" ? "MALE" : body[FIELDS[index]!]!);
         state.assessment.version += 1;
         return json(route, 409, { error: { code: "VERSION_CONFLICT", message: "The resource version has changed.", details: [], requestId: "req_e2e" } });
       }
@@ -97,7 +113,7 @@ async function mockFunnel(
     }
     return route.fallback();
   });
-  return { getState: () => state, submittedBodies };
+  return { getState: () => state, submittedBodies, getNewAssessmentRequests: () => newAssessmentRequests };
 }
 
 test("P0-04-T01 new visitor completes eight steps and reaches the free result", async ({ page }) => {
@@ -141,18 +157,43 @@ test("P0-04-T03 server error preserves target input and original request can be 
   await page.getByRole("button", { name: "Continue" }).click();
   await expect(page.locator("#field-error")).toContainText(/internal error/i);
   await expect(input).toHaveValue("75");
-  await page.getByRole("button", { name: "Continue" }).click();
+  await page.getByRole("button", { name: "Retry" }).click();
   await expect(page).toHaveURL(/\/quiz\/activity$/);
 });
 
-test("P0-04 conflict refreshes the server answer and asks for confirmation", async ({ page }) => {
-  await mockFunnel(page, stateAt("SEX"), { conflictStepOnce: "sex" });
-  await page.goto("/quiz/sex");
-  await page.getByLabel("Female").check();
+test("P0-04 measurement conflict syncs the visible and normalized values before confirmation", async ({ page }) => {
+  const mocked = await mockFunnel(page, stateAt("HEIGHT", { ageRange: "18_29", sex: "FEMALE", goal: "LOSE_WEIGHT", age: 25, heightCm: 170 }), { conflictStepOnce: "height", conflictValue: 175 });
+  await page.goto("/quiz/height");
+  await page.getByLabel(/height/i).fill("180");
   await page.getByRole("button", { name: "Continue" }).click();
   await expect(page.getByRole("status")).toContainText("changed in another tab");
-  await expect(page.getByRole("radio", { name: "Male", exact: true })).toBeChecked();
+  await expect(page.getByLabel(/height/i)).toHaveValue("175");
+  await page.getByRole("button", { name: "Continue" }).click();
+  await expect(page).toHaveURL(/\/quiz\/current-weight$/);
+  expect(mocked.submittedBodies.at(-1)).toMatchObject({ heightCm: 175 });
+});
+
+test("P0-04 restore failures show retry instead of a false new-visitor or endless loading state", async ({ page }) => {
+  await mockFunnel(page, stateAt("SEX"), { failSessionOnce: true });
+  await page.goto("/");
+  await expect(page.getByRole("heading", { name: "We couldn’t restore your assessment" })).toBeVisible();
+  await page.getByRole("button", { name: "Retry" }).click();
   await expect(page).toHaveURL(/\/quiz\/sex$/);
+});
+
+test("P0-04 starting a new assessment is single-flight and recoverable", async ({ page }) => {
+  const completed = stateAt("COMPLETE");
+  completed.assessment.status = "COMPLETED";
+  const mocked = await mockFunnel(page, completed, { failNewAssessmentOnce: true });
+  await page.goto("/result");
+  await page.getByRole("button", { name: "Start a new assessment" }).evaluate((button: HTMLButtonElement) => {
+    button.click(); button.click();
+  });
+  await expect(page.locator(".result-hero .error-banner")).toContainText(/service is unavailable/i);
+  expect(mocked.getNewAssessmentRequests()).toBe(1);
+  await page.getByRole("button", { name: "Retry new assessment" }).click();
+  await expect(page).toHaveURL(/\/quiz\/age-range$/);
+  expect(mocked.getNewAssessmentRequests()).toBe(2);
 });
 
 test("P0-04-T04 only a returning browser sees the lost-session explanation", async ({ page }) => {

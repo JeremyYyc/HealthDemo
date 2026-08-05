@@ -3,12 +3,12 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation.js";
 import { apiRequest, ClientApiError, stepPath } from "../../src/ui/session.js";
-import { LoadingCard, PageShell } from "../../src/ui/shell.js";
+import { LoadingCard, PageShell, SessionFailure } from "../../src/ui/shell.js";
 import { useSession } from "../../src/ui/use-session.js";
 
 export default function GeneratingPage() {
   const router = useRouter();
-  const { session, loading, refresh } = useSession();
+  const { session, error: sessionError, loading, refresh } = useSession();
   const attempted = useRef(false);
   const [error, setError] = useState("");
 
@@ -38,6 +38,8 @@ export default function GeneratingPage() {
     void complete();
   });
 
-  if (loading || !error) return <PageShell narrow><LoadingCard label="Calculating your health direction…" /></PageShell>;
+  if (loading) return <PageShell narrow><LoadingCard label="Calculating your health direction…" /></PageShell>;
+  if (!session) return <PageShell narrow><SessionFailure message={sessionError?.message ?? "The session could not be restored."} retry={() => void refresh()} /></PageShell>;
+  if (!error) return <PageShell narrow><LoadingCard label="Calculating your health direction…" /></PageShell>;
   return <PageShell narrow><section className="card centered"><p className="eyebrow">Almost there</p><h1>We couldn’t finish the calculation</h1><p className="error-banner" role="alert">{error}</p><button className="primary-button" type="button" onClick={() => { attempted.current = false; void complete(); }}>Retry</button></section></PageShell>;
 }
