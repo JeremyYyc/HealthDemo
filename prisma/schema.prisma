@@ -13,12 +13,10 @@ enum AssessmentStatus {
 }
 
 enum AgeRange {
-  AGE_18_29
-  AGE_30_39
-  AGE_40_49
-  AGE_50_59
-  AGE_60_69
-  AGE_70_PLUS
+  AGE_18_29  @map("18_29")
+  AGE_30_39  @map("30_39")
+  AGE_40_49  @map("40_49")
+  AGE_50_100 @map("50_100")
 }
 
 enum Sex {
@@ -27,9 +25,9 @@ enum Sex {
 }
 
 enum Goal {
-  LOSE
-  MAINTAIN
-  GAIN
+  LOSE_WEIGHT
+  MAINTAIN_WEIGHT
+  GAIN_WEIGHT
 }
 
 enum ActivityLevel {
@@ -42,9 +40,9 @@ enum ActivityLevel {
 
 enum BmiCategory {
   UNDERWEIGHT
-  HEALTHY
+  NORMAL
   OVERWEIGHT
-  OBESE
+  OBESITY
 }
 
 enum SubscriptionStatus {
@@ -69,7 +67,7 @@ model Session {
   createdAt    DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt    DateTime      @updatedAt @map("updated_at") @db.Timestamptz(3)
   lastSeenAt   DateTime?     @map("last_seen_at") @db.Timestamptz(3)
-  expiresAt    DateTime      @map("expires_at") @db.Timestamptz(3)
+  expiresAt    DateTime      @default(dbgenerated("(CURRENT_TIMESTAMP + INTERVAL '30 days')")) @map("expires_at") @db.Timestamptz(3)
   assessments  Assessment[]
   subscription Subscription?
   payments     Payment[]

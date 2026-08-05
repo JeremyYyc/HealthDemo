@@ -1,9 +1,9 @@
 CREATE TYPE "AssessmentStatus" AS ENUM ('IN_PROGRESS', 'COMPLETED');
-CREATE TYPE "AgeRange" AS ENUM ('AGE_18_29', 'AGE_30_39', 'AGE_40_49', 'AGE_50_59', 'AGE_60_69', 'AGE_70_PLUS');
+CREATE TYPE "AgeRange" AS ENUM ('18_29', '30_39', '40_49', '50_100');
 CREATE TYPE "Sex" AS ENUM ('FEMALE', 'MALE');
-CREATE TYPE "Goal" AS ENUM ('LOSE', 'MAINTAIN', 'GAIN');
+CREATE TYPE "Goal" AS ENUM ('LOSE_WEIGHT', 'MAINTAIN_WEIGHT', 'GAIN_WEIGHT');
 CREATE TYPE "ActivityLevel" AS ENUM ('SEDENTARY', 'LIGHT', 'MODERATE', 'ACTIVE', 'VERY_ACTIVE');
-CREATE TYPE "BmiCategory" AS ENUM ('UNDERWEIGHT', 'HEALTHY', 'OVERWEIGHT', 'OBESE');
+CREATE TYPE "BmiCategory" AS ENUM ('UNDERWEIGHT', 'NORMAL', 'OVERWEIGHT', 'OBESITY');
 CREATE TYPE "SubscriptionStatus" AS ENUM ('INACTIVE', 'ACTIVE', 'EXPIRED');
 CREATE TYPE "PaymentStatus" AS ENUM ('PENDING', 'SUCCEEDED', 'FAILED');
 CREATE TYPE "PaymentProvider" AS ENUM ('DEMO');
@@ -14,7 +14,7 @@ CREATE TABLE "sessions" (
   "created_at" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
   "updated_at" TIMESTAMPTZ(3) NOT NULL,
   "last_seen_at" TIMESTAMPTZ(3),
-  "expires_at" TIMESTAMPTZ(3) NOT NULL,
+  "expires_at" TIMESTAMPTZ(3) NOT NULL DEFAULT (CURRENT_TIMESTAMP + INTERVAL '30 days'),
   CONSTRAINT "sessions_pkey" PRIMARY KEY ("id")
 );
 
@@ -81,14 +81,12 @@ CREATE TABLE "payments" (
 );
 
 CREATE UNIQUE INDEX "sessions_token_hash_key" ON "sessions"("token_hash");
-CREATE UNIQUE INDEX "assessments_one_in_progress_per_session" ON "assessments"("session_id") WHERE "status" = 'IN_PROGRESS';
 CREATE INDEX "assessments_session_id_status_idx" ON "assessments"("session_id", "status");
 CREATE UNIQUE INDEX "assessment_results_assessment_id_key" ON "assessment_results"("assessment_id");
 CREATE UNIQUE INDEX "subscriptions_session_id_key" ON "subscriptions"("session_id");
 CREATE UNIQUE INDEX "subscriptions_activation_payment_id_key" ON "subscriptions"("activation_payment_id");
 CREATE UNIQUE INDEX "payments_transaction_id_key" ON "payments"("transaction_id");
 CREATE UNIQUE INDEX "payments_session_id_idempotency_key_key" ON "payments"("session_id", "idempotency_key");
-CREATE UNIQUE INDEX "payments_one_succeeded_per_session" ON "payments"("session_id") WHERE "status" = 'SUCCEEDED';
 CREATE INDEX "payments_assessment_id_idx" ON "payments"("assessment_id");
 
 ALTER TABLE "assessments" ADD CONSTRAINT "assessments_session_id_fkey" FOREIGN KEY ("session_id") REFERENCES "sessions"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
