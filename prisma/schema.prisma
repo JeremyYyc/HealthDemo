@@ -1,0 +1,156 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum AssessmentStatus {
+  IN_PROGRESS
+  COMPLETED
+}
+
+enum AgeRange {
+  AGE_18_29
+  AGE_30_39
+  AGE_40_49
+  AGE_50_59
+  AGE_60_69
+  AGE_70_PLUS
+}
+
+enum Sex {
+  FEMALE
+  MALE
+}
+
+enum Goal {
+  LOSE
+  MAINTAIN
+  GAIN
+}
+
+enum ActivityLevel {
+  SEDENTARY
+  LIGHT
+  MODERATE
+  ACTIVE
+  VERY_ACTIVE
+}
+
+enum BmiCategory {
+  UNDERWEIGHT
+  HEALTHY
+  OVERWEIGHT
+  OBESE
+}
+
+enum SubscriptionStatus {
+  INACTIVE
+  ACTIVE
+  EXPIRED
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCEEDED
+  FAILED
+}
+
+enum PaymentProvider {
+  DEMO
+}
+
+model Session {
+  id           String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tokenHash    String        @unique @map("token_hash") @db.VarChar(128)
+  createdAt    DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt    DateTime      @updatedAt @map("updated_at") @db.Timestamptz(3)
+  lastSeenAt   DateTime?     @map("last_seen_at") @db.Timestamptz(3)
+  expiresAt    DateTime      @map("expires_at") @db.Timestamptz(3)
+  assessments  Assessment[]
+  subscription Subscription?
+  payments     Payment[]
+
+  @@map("sessions")
+}
+
+model Assessment {
+  id             String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  sessionId      String            @map("session_id") @db.Uuid
+  status         AssessmentStatus  @default(IN_PROGRESS)
+  version        Int               @default(0)
+  ageRange       AgeRange?         @map("age_range")
+  sex            Sex?
+  goal           Goal?
+  age            Int?
+  heightCm       Decimal?          @map("height_cm") @db.Decimal(5, 1)
+  weightKg       Decimal?          @map("weight_kg") @db.Decimal(5, 1)
+  targetWeightKg Decimal?          @map("target_weight_kg") @db.Decimal(5, 1)
+  activityLevel  ActivityLevel?    @map("activity_level")
+  completedAt    DateTime?         @map("completed_at") @db.Timestamptz(3)
+  createdAt      DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime          @updatedAt @map("updated_at") @db.Timestamptz(3)
+  session        Session           @relation(fields: [sessionId], references: [id], onDelete: Restrict)
+  result         AssessmentResult?
+  payments       Payment[]
+
+  @@index([sessionId, status])
+  @@map("assessments")
+}
+
+model AssessmentResult {
+  id                      String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  assessmentId            String      @unique @map("assessment_id") @db.Uuid
+  bmi                     Decimal     @db.Decimal(4, 1)
+  bmiCategory             BmiCategory @map("bmi_category")
+  bmrKcal                 Int         @map("bmr_kcal")
+  tdeeKcal                Int         @map("tdee_kcal")
+  recommendedCaloriesKcal Int         @map("recommended_calories_kcal")
+  targetDate              DateTime?   @map("target_date") @db.Date
+  calculationDate         DateTime    @map("calculation_date") @db.Date
+  estimatedWeeks          Int         @map("estimated_weeks")
+  predictionCurve         Json        @map("prediction_curve") @db.JsonB
+  calorieFloorApplied     Boolean     @map("calorie_floor_applied")
+  algorithmVersion        String      @map("algorithm_version") @db.VarChar(32)
+  createdAt               DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
+  assessment              Assessment  @relation(fields: [assessmentId], references: [id], onDelete: Restrict)
+
+  @@map("assessment_results")
+}
+
+model Subscription {
+  id                  String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  sessionId           String             @unique @map("session_id") @db.Uuid
+  status              SubscriptionStatus @default(INACTIVE)
+  activatedAt         DateTime?          @map("activated_at") @db.Timestamptz(3)
+  expiresAt           DateTime?          @map("expires_at") @db.Timestamptz(3)
+  activationPaymentId String?            @unique @map("activation_payment_id") @db.Uuid
+  updatedAt           DateTime           @updatedAt @map("updated_at") @db.Timestamptz(3)
+  session             Session            @relation(fields: [sessionId], references: [id], onDelete: Restrict)
+  activationPayment   Payment?           @relation("SubscriptionActivationPayment", fields: [activationPaymentId], references: [id], onDelete: Restrict)
+
+  @@map("subscriptions")
+}
+
+model Payment {
+  id                    String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  sessionId             String          @map("session_id") @db.Uuid
+  assessmentId          String          @map("assessment_id") @db.Uuid
+  status                PaymentStatus
+  provider              PaymentProvider @default(DEMO)
+  idempotencyKey        String          @map("idempotency_key") @db.VarChar(128)
+  requestFingerprint    String          @map("request_fingerprint") @db.VarChar(128)
+  transactionId         String          @unique @map("transaction_id") @db.VarChar(128)
+  paidAt                DateTime?       @map("paid_at") @db.Timestamptz(3)
+  createdAt             DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
+  session               Session         @relation(fields: [sessionId], references: [id], onDelete: Restrict)
+  assessment            Assessment      @relation(fields: [assessmentId], references: [id], onDelete: Restrict)
+  activatedSubscription Subscription?   @relation("SubscriptionActivationPayment")
+
+  @@unique([sessionId, idempotencyKey])
+  @@index([assessmentId])
+  @@map("payments")
+}

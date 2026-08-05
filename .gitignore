@@ -5,9 +5,12 @@
 
 # Dependencies and build output
 node_modules/
+coverage/
 dist/
 build/
-coverage/
+src/generated/
+playwright-report/
+test-results/
 
 # Editor and local tooling
 .idea/
