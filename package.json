@@ -12,8 +12,9 @@
     "start": "next start",
     "prisma:generate": "prisma generate",
     "db:migrate": "prisma migrate deploy",
-    "test": "vitest run --passWithNoTests --exclude 'tests/integration/**'",
+    "test": "vitest run --passWithNoTests --exclude 'tests/integration/**' --exclude 'tests/e2e/**'",
     "test:integration": "npm run prisma:generate && vitest run tests/integration",
+    "test:e2e": "playwright test",
     "typecheck": "tsc --noEmit",
     "check": "npm run prisma:generate && npm run typecheck && npm test"
   },
@@ -28,6 +29,7 @@
     "zod": "4.4.3"
   },
   "devDependencies": {
+    "@playwright/test": "1.55.0",
     "@types/node": "24.10.1",
     "@types/pg": "8.15.6",
     "prisma": "7.9.1",

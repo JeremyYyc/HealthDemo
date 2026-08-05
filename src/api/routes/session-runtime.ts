@@ -9,7 +9,10 @@ export function getSessionService(): SessionService {
   if (!tokenSecret) throw new Error("SESSION_TOKEN_SECRET is required");
   return new SessionService(getPrismaClient(), {
     tokenSecret,
-    secureCookie: process.env.NODE_ENV === "production",
+    secureCookie:
+      process.env.SESSION_COOKIE_SECURE === undefined
+        ? process.env.NODE_ENV === "production"
+        : process.env.SESSION_COOKIE_SECURE === "true",
   });
 }
 
@@ -18,6 +21,9 @@ export function getAssessmentStepService(): AssessmentStepService {
   if (!tokenSecret) throw new Error("SESSION_TOKEN_SECRET is required");
   return new AssessmentStepService(getPrismaClient(), {
     tokenSecret,
-    secureCookie: process.env.NODE_ENV === "production",
+    secureCookie:
+      process.env.SESSION_COOKIE_SECURE === undefined
+        ? process.env.NODE_ENV === "production"
+        : process.env.SESSION_COOKIE_SECURE === "true",
   });
 }
