@@ -96,21 +96,23 @@ function assertEnum<T extends string>(
   }
 }
 
-function assertFiniteNumber(
+function normalizeFiniteNumber(
   field: "heightCm" | "weightKg" | "targetWeightKg",
   value: unknown,
   minimum: number,
   maximum: number,
-): asserts value is number {
+): number {
   if (typeof value !== "number" || !Number.isFinite(value)) {
     invalid(field, `${field} must be a finite number`);
-  }
-  if (value < minimum || value > maximum) {
-    invalid(field, `${field} must be between ${minimum} and ${maximum}`);
   }
   if (Math.abs(value * 10 - Math.round(value * 10)) > 1e-8) {
     invalid(field, `${field} must have at most one decimal place`);
   }
+  const normalized = Math.round(value * 10) / 10;
+  if (normalized < minimum || normalized > maximum) {
+    invalid(field, `${field} must be between ${minimum} and ${maximum}`);
+  }
+  return normalized;
 }
 
 function parseUtcDateOnly(value: unknown): Date {
@@ -150,7 +152,7 @@ export function classifyBmi(bmi: number): BmiCategory {
   return "OBESITY";
 }
 
-export function validateHealthCalculationInput(input: HealthCalculationInput): void {
+function normalizeHealthCalculationInput(input: HealthCalculationInput): HealthCalculationInput {
   if (!input || typeof input !== "object") {
     invalid("ageRange", "input must be an object");
   }
@@ -170,62 +172,74 @@ export function validateHealthCalculationInput(input: HealthCalculationInput): v
     businessRule("age", "age must fall within ageRange");
   }
 
-  assertFiniteNumber("heightCm", input.heightCm, 100, 250);
-  assertFiniteNumber("weightKg", input.weightKg, 30, 350);
-  assertFiniteNumber("targetWeightKg", input.targetWeightKg, 30, 350);
+  const normalizedInput: HealthCalculationInput = {
+    ...input,
+    heightCm: normalizeFiniteNumber("heightCm", input.heightCm, 100, 250),
+    weightKg: normalizeFiniteNumber("weightKg", input.weightKg, 30, 350),
+    targetWeightKg: normalizeFiniteNumber("targetWeightKg", input.targetWeightKg, 30, 350),
+  };
   parseUtcDateOnly(input.calculationDate);
 
-  const difference = input.targetWeightKg - input.weightKg;
-  if (input.goal === "LOSE_WEIGHT" && difference >= 0) {
+  const difference = normalizedInput.targetWeightKg - normalizedInput.weightKg;
+  if (normalizedInput.goal === "LOSE_WEIGHT" && difference >= 0) {
     businessRule("targetWeightKg", "target weight must be below current weight for a weight-loss goal");
   }
-  if (input.goal === "GAIN_WEIGHT" && difference <= 0) {
+  if (normalizedInput.goal === "GAIN_WEIGHT" && difference <= 0) {
     businessRule("targetWeightKg", "target weight must be above current weight for a weight-gain goal");
   }
-  if (input.goal === "MAINTAIN_WEIGHT" && Math.abs(difference) > 2) {
+  if (normalizedInput.goal === "MAINTAIN_WEIGHT" && Math.abs(difference) > 2) {
     businessRule("targetWeightKg", "maintenance target must be within 2 kg of current weight");
   }
 
-  const heightMeters = input.heightCm / 100;
-  const targetBmi = input.targetWeightKg / heightMeters ** 2;
+  const heightMeters = normalizedInput.heightCm / 100;
+  const targetBmi = normalizedInput.targetWeightKg / heightMeters ** 2;
   if (targetBmi < 15 || targetBmi > 50) {
     businessRule("targetWeightKg", "target BMI must be between 15 and 50");
   }
 
-  if (input.goal !== "MAINTAIN_WEIGHT") {
-    const weeklyRateHundredths = input.goal === "LOSE_WEIGHT" ? 50 : 25;
+  if (normalizedInput.goal !== "MAINTAIN_WEIGHT") {
+    const weeklyRateHundredths = normalizedInput.goal === "LOSE_WEIGHT" ? 50 : 25;
     const differenceHundredths = Math.abs(
-      Math.round(input.targetWeightKg * 100) - Math.round(input.weightKg * 100),
+      Math.round(normalizedInput.targetWeightKg * 100) - Math.round(normalizedInput.weightKg * 100),
     );
     if (Math.ceil(differenceHundredths / weeklyRateHundredths) > 104) {
       businessRule("targetWeightKg", "target timeline must not exceed 104 weeks");
     }
   }
+  return normalizedInput;
+}
+
+export function validateHealthCalculationInput(input: HealthCalculationInput): void {
+  normalizeHealthCalculationInput(input);
 }
 
 export function calculateHealthResult(input: HealthCalculationInput): HealthCalculationResult {
-  validateHealthCalculationInput(input);
-  const calculationDate = parseUtcDateOnly(input.calculationDate);
-  const heightMeters = input.heightCm / 100;
-  const rawBmi = input.weightKg / heightMeters ** 2;
+  const normalizedInput = normalizeHealthCalculationInput(input);
+  const calculationDate = parseUtcDateOnly(normalizedInput.calculationDate);
+  const heightMeters = normalizedInput.heightCm / 100;
+  const rawBmi = normalizedInput.weightKg / heightMeters ** 2;
   const rawBmr =
-    10 * input.weightKg + 6.25 * input.heightCm - 5 * input.age + (input.sex === "MALE" ? 5 : -161);
-  const rawTdee = rawBmr * ACTIVITY_FACTORS[input.activityLevel];
-  const calorieAdjustment = input.goal === "LOSE_WEIGHT" ? -500 : input.goal === "GAIN_WEIGHT" ? 300 : 0;
+    10 * normalizedInput.weightKg +
+    6.25 * normalizedInput.heightCm -
+    5 * normalizedInput.age +
+    (normalizedInput.sex === "MALE" ? 5 : -161);
+  const rawTdee = rawBmr * ACTIVITY_FACTORS[normalizedInput.activityLevel];
+  const calorieAdjustment =
+    normalizedInput.goal === "LOSE_WEIGHT" ? -500 : normalizedInput.goal === "GAIN_WEIGHT" ? 300 : 0;
   const rawRecommendation = rawTdee + calorieAdjustment;
   const calorieFloorApplied = rawRecommendation < CALORIE_FLOOR_KCAL;
 
   let estimatedWeeks = 0;
   let targetDate: string | null = null;
   const predictionCurve: PredictionPoint[] = [
-    { week: 0, date: input.calculationDate, weightKg: roundToOneDecimal(input.weightKg) },
+    { week: 0, date: normalizedInput.calculationDate, weightKg: normalizedInput.weightKg },
   ];
 
-  if (input.goal !== "MAINTAIN_WEIGHT") {
-    const direction = input.goal === "LOSE_WEIGHT" ? -1 : 1;
-    const weeklyRateHundredths = input.goal === "LOSE_WEIGHT" ? 50 : 25;
-    const currentHundredths = Math.round(input.weightKg * 100);
-    const targetHundredths = Math.round(input.targetWeightKg * 100);
+  if (normalizedInput.goal !== "MAINTAIN_WEIGHT") {
+    const direction = normalizedInput.goal === "LOSE_WEIGHT" ? -1 : 1;
+    const weeklyRateHundredths = normalizedInput.goal === "LOSE_WEIGHT" ? 50 : 25;
+    const currentHundredths = Math.round(normalizedInput.weightKg * 100);
+    const targetHundredths = Math.round(normalizedInput.targetWeightKg * 100);
     estimatedWeeks = Math.ceil(Math.abs(targetHundredths - currentHundredths) / weeklyRateHundredths);
     targetDate = addUtcDays(calculationDate, estimatedWeeks * 7);
 
@@ -238,7 +252,8 @@ export function calculateHealthResult(input: HealthCalculationInput): HealthCalc
       predictionCurve.push({
         week,
         date: addUtcDays(calculationDate, week * 7),
-        weightKg: week === estimatedWeeks ? input.targetWeightKg : roundToOneDecimal(boundedHundredths / 100),
+        weightKg:
+          week === estimatedWeeks ? normalizedInput.targetWeightKg : roundToOneDecimal(boundedHundredths / 100),
       });
     }
   }
@@ -250,7 +265,7 @@ export function calculateHealthResult(input: HealthCalculationInput): HealthCalc
     tdeeKcal: Math.round(rawTdee),
     recommendedCaloriesKcal: Math.round(Math.max(CALORIE_FLOOR_KCAL, rawRecommendation)),
     targetDate,
-    calculationDate: input.calculationDate,
+    calculationDate: normalizedInput.calculationDate,
     estimatedWeeks,
     predictionCurve,
     calorieFloorApplied,

@@ -32,6 +32,16 @@ function expectError(
   );
 }
 
+function expectRawError(
+  input: unknown,
+  field: keyof HealthCalculationInput,
+  code: "INVALID_INPUT" | "BUSINESS_RULE_VIOLATION" = "INVALID_INPUT",
+) {
+  expect(() => calculateHealthResult(input as HealthCalculationInput)).toThrowError(
+    expect.objectContaining<Partial<HealthCalculationError>>({ name: "HealthCalculationError", field, code }),
+  );
+}
+
 describe("P0-05 health calculation engine v1", () => {
   it("P0-05-T01 applies both Mifflin–St Jeor constants and all five activity factors", () => {
     expect(calculate({ sex: "MALE", activityLevel: "SEDENTARY" })).toMatchObject({ bmrKcal: 1755, tdeeKcal: 2106 });
@@ -60,13 +70,46 @@ describe("P0-05 health calculation engine v1", () => {
     expectError({ ageRange: "50_100", age: 101 }, "age");
     expectError({ age: 20.5 }, "age");
     expectError({ age: Number.NaN }, "age");
+    expectError({ age: Number.POSITIVE_INFINITY }, "age");
     expectError({ heightCm: 99.9 }, "heightCm");
     expectError({ heightCm: 250.1 }, "heightCm");
+    expectError({ heightCm: 0 }, "heightCm");
+    expectError({ heightCm: -1 }, "heightCm");
+    expectError({ heightCm: Number.MIN_VALUE }, "heightCm");
+    expectError({ heightCm: Number.NaN }, "heightCm");
     expectError({ heightCm: Number.POSITIVE_INFINITY }, "heightCm");
     expectError({ weightKg: 29.9 }, "weightKg");
     expectError({ weightKg: 350.1 }, "weightKg");
+    expectError({ weightKg: 0 }, "weightKg");
+    expectError({ weightKg: -1 }, "weightKg");
+    expectError({ weightKg: Number.NaN }, "weightKg");
+    expectError({ weightKg: Number.POSITIVE_INFINITY }, "weightKg");
     expectError({ targetWeightKg: 74.55 }, "targetWeightKg");
     expectError({ ageRange: "18_29", age: 35 }, "age", "BUSINESS_RULE_VIOLATION");
+
+    for (const [field, value] of [
+      ["age", "35"],
+      ["heightCm", "180"],
+      ["weightKg", "80"],
+      ["targetWeightKg", "75"],
+      ["age", null],
+      ["heightCm", null],
+      ["weightKg", null],
+      ["targetWeightKg", null],
+      ["age", undefined],
+      ["heightCm", undefined],
+      ["weightKg", undefined],
+      ["targetWeightKg", undefined],
+    ] as const) {
+      expectRawError({ ...baseInput, [field]: value }, field);
+    }
+
+    const normalized = calculate({
+      goal: "MAINTAIN_WEIGHT",
+      weightKg: 79.9999999996,
+      targetWeightKg: 82.0000000004,
+    });
+    expect(normalized.predictionCurve).toEqual([{ week: 0, date: "2026-08-05", weightKg: 80 }]);
   });
 
   it("P0-05-T03 classifies exact BMI boundaries and displays one decimal", () => {
@@ -84,10 +127,12 @@ describe("P0-05 health calculation engine v1", () => {
     expectError({ goal: "MAINTAIN_WEIGHT", targetWeightKg: 82.1 }, "targetWeightKg", "BUSINESS_RULE_VIOLATION");
     expectError({ heightCm: 200, weightKg: 80, targetWeightKg: 59.9 }, "targetWeightKg", "BUSINESS_RULE_VIOLATION");
     expectError(
-      { goal: "GAIN_WEIGHT", heightCm: 100, weightKg: 30, targetWeightKg: 56.1 },
+      { goal: "GAIN_WEIGHT", heightCm: 100, weightKg: 30, targetWeightKg: 50.1 },
       "targetWeightKg",
       "BUSINESS_RULE_VIOLATION",
     );
+    expect(calculate({ heightCm: 200, weightKg: 80, targetWeightKg: 60 })).toBeDefined();
+    expect(calculate({ goal: "GAIN_WEIGHT", heightCm: 200, weightKg: 180, targetWeightKg: 200 })).toBeDefined();
     expect(calculate({ goal: "GAIN_WEIGHT", weightKg: 80, targetWeightKg: 106 })).toMatchObject({ estimatedWeeks: 104 });
     expectError(
       { goal: "GAIN_WEIGHT", weightKg: 80, targetWeightKg: 106.1 },
