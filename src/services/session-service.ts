@@ -10,7 +10,7 @@ export const ASSESSMENT_STEPS = [
   "GOAL",
   "AGE",
   "HEIGHT",
-  "WEIGHT",
+  "CURRENT_WEIGHT",
   "TARGET_WEIGHT",
   "ACTIVITY_LEVEL",
 ] as const;
@@ -66,30 +66,97 @@ export interface SessionDto {
   assessment: AssessmentDto;
 }
 
-function answerEntries(assessment: SelectedAssessment): [AssessmentStep, string, string | number | null][] {
+interface AnswerEntry {
+  step: AssessmentStep;
+  field: string;
+  value: string | number | null;
+  valid: boolean;
+}
+
+function validMetric(value: number | null, minimum: number, maximum: number): boolean {
+  return value !== null && Number.isFinite(value) && value >= minimum && value <= maximum;
+}
+
+function ageMatchesRange(age: number | null, ageRange: AgeRange | null): boolean {
+  if (age === null || ageRange === null || !Number.isInteger(age)) return false;
+  const bounds: Record<AgeRange, readonly [number, number]> = {
+    [AgeRange.AGE_18_29]: [18, 29],
+    [AgeRange.AGE_30_39]: [30, 39],
+    [AgeRange.AGE_40_49]: [40, 49],
+    [AgeRange.AGE_50_100]: [50, 100],
+  };
+  const [minimum, maximum] = bounds[ageRange];
+  return age >= minimum && age <= maximum;
+}
+
+function validTarget(assessment: SelectedAssessment): boolean {
+  const heightCm = assessment.heightCm?.toNumber() ?? null;
+  const weightKg = assessment.weightKg?.toNumber() ?? null;
+  const targetWeightKg = assessment.targetWeightKg?.toNumber() ?? null;
+  if (
+    assessment.goal === null ||
+    heightCm === null ||
+    weightKg === null ||
+    targetWeightKg === null ||
+    !validMetric(heightCm, 100, 250) ||
+    !validMetric(weightKg, 30, 350) ||
+    !validMetric(targetWeightKg, 30, 350)
+  ) {
+    return false;
+  }
+  const difference = targetWeightKg - weightKg;
+  if (assessment.goal === "LOSE_WEIGHT" && difference >= 0) return false;
+  if (assessment.goal === "GAIN_WEIGHT" && difference <= 0) return false;
+  if (assessment.goal === "MAINTAIN_WEIGHT" && Math.abs(difference) > 2) return false;
+  const targetBmi = targetWeightKg / (heightCm / 100) ** 2;
+  if (targetBmi < 15 || targetBmi > 50) return false;
+  if (assessment.goal === "MAINTAIN_WEIGHT") return true;
+  const weeklyRate = assessment.goal === "LOSE_WEIGHT" ? 0.5 : 0.25;
+  return Math.ceil(Math.abs(difference) / weeklyRate) <= 104;
+}
+
+function answerEntries(assessment: SelectedAssessment): AnswerEntry[] {
+  const heightCm = assessment.heightCm?.toNumber() ?? null;
+  const weightKg = assessment.weightKg?.toNumber() ?? null;
+  const targetWeightKg = assessment.targetWeightKg?.toNumber() ?? null;
   return [
-    ["AGE_RANGE", "ageRange", assessment.ageRange ? DATABASE_TO_AGE_RANGE[assessment.ageRange] : null],
-    ["SEX", "sex", assessment.sex],
-    ["GOAL", "goal", assessment.goal],
-    ["AGE", "age", assessment.age],
-    ["HEIGHT", "heightCm", assessment.heightCm?.toNumber() ?? null],
-    ["WEIGHT", "weightKg", assessment.weightKg?.toNumber() ?? null],
-    ["TARGET_WEIGHT", "targetWeightKg", assessment.targetWeightKg?.toNumber() ?? null],
-    ["ACTIVITY_LEVEL", "activityLevel", assessment.activityLevel],
+    {
+      step: "AGE_RANGE",
+      field: "ageRange",
+      value: assessment.ageRange ? DATABASE_TO_AGE_RANGE[assessment.ageRange] : null,
+      valid: assessment.ageRange !== null,
+    },
+    { step: "SEX", field: "sex", value: assessment.sex, valid: assessment.sex !== null },
+    { step: "GOAL", field: "goal", value: assessment.goal, valid: assessment.goal !== null },
+    { step: "AGE", field: "age", value: assessment.age, valid: ageMatchesRange(assessment.age, assessment.ageRange) },
+    { step: "HEIGHT", field: "heightCm", value: heightCm, valid: validMetric(heightCm, 100, 250) },
+    {
+      step: "CURRENT_WEIGHT",
+      field: "weightKg",
+      value: weightKg,
+      valid: validMetric(weightKg, 30, 350),
+    },
+    { step: "TARGET_WEIGHT", field: "targetWeightKg", value: targetWeightKg, valid: validTarget(assessment) },
+    {
+      step: "ACTIVITY_LEVEL",
+      field: "activityLevel",
+      value: assessment.activityLevel,
+      valid: assessment.activityLevel !== null,
+    },
   ];
 }
 
 export function toAssessmentDto(assessment: SelectedAssessment): AssessmentDto {
   const entries = answerEntries(assessment);
-  const completedSteps = entries.filter(([, , value]) => value !== null).map(([step]) => step);
-  const nextStep = entries.find(([, , value]) => value === null)?.[0] ?? "COMPLETE";
+  const completedSteps = entries.filter(({ valid }) => valid).map(({ step }) => step);
+  const nextStep = entries.find(({ valid }) => !valid)?.step ?? "COMPLETE";
   return {
     id: assessment.id,
     status: assessment.status,
     currentStep: nextStep,
     nextStep,
     completedSteps,
-    answers: Object.fromEntries(entries.flatMap(([, field, value]) => (value === null ? [] : [[field, value]]))),
+    answers: Object.fromEntries(entries.flatMap(({ field, value }) => (value === null ? [] : [[field, value]]))),
     version: assessment.version,
     actions: assessment.status === "COMPLETED" ? ["VIEW_RESULT", "START_NEW"] : [],
   };

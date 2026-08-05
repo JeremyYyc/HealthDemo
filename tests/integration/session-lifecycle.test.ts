@@ -176,6 +176,7 @@ describe("P0-02 anonymous Session and Assessment lifecycle", () => {
     nowReference.value = new Date("2026-08-20T12:00:00Z");
     const valid = await routes.sessionGet(new Request(`${appBaseUrl}/api/session`, { headers: { cookie } }));
     expect(valid.status).toBe(200);
+    expect(valid.headers.has("set-cookie")).toBe(false);
     expect((await prisma.session.findUniqueOrThrow({ where: { id: data.sessionId } })).expiresAt).toEqual(originalExpiry);
 
     const tampered = await routes.sessionGet(
@@ -208,7 +209,7 @@ describe("P0-02 anonymous Session and Assessment lifecycle", () => {
     const entry = await dataOf<{ assessment: { id: string } }>(created);
     await prisma.assessment.update({
       where: { id: entry.assessment.id },
-      data: { sex: "FEMALE", goal: "LOSE_WEIGHT", age: 25, version: 4 },
+      data: { sex: "FEMALE", goal: "LOSE_WEIGHT", age: 25, heightCm: 170, version: 5 },
     });
 
     const response = await routes.sessionGet(new Request(`${appBaseUrl}/api/session`, { headers: { cookie } }));
@@ -225,11 +226,29 @@ describe("P0-02 anonymous Session and Assessment lifecycle", () => {
     expect(response.status).toBe(200);
     expect(data.subscriptionStatus).toBe("INACTIVE");
     expect(data.assessment).toMatchObject({
-      currentStep: "HEIGHT",
-      nextStep: "HEIGHT",
-      completedSteps: ["AGE_RANGE", "SEX", "GOAL", "AGE"],
-      answers: { ageRange: "18_29", sex: "FEMALE", goal: "LOSE_WEIGHT", age: 25 },
-      version: 4,
+      currentStep: "CURRENT_WEIGHT",
+      nextStep: "CURRENT_WEIGHT",
+      completedSteps: ["AGE_RANGE", "SEX", "GOAL", "AGE", "HEIGHT"],
+      answers: { ageRange: "18_29", sex: "FEMALE", goal: "LOSE_WEIGHT", age: 25, heightCm: 170 },
+      version: 5,
     });
+
+    await prisma.assessment.update({ where: { id: entry.assessment.id }, data: { age: 35 } });
+    const invalidAge = await dataOf<{
+      assessment: { nextStep: string; completedSteps: string[]; answers: Record<string, unknown> };
+    }>(await routes.sessionGet(new Request(`${appBaseUrl}/api/session`, { headers: { cookie } })));
+    expect(invalidAge.assessment.nextStep).toBe("AGE");
+    expect(invalidAge.assessment.completedSteps).not.toContain("AGE");
+    expect(invalidAge.assessment.answers.age).toBe(35);
+
+    await prisma.assessment.update({
+      where: { id: entry.assessment.id },
+      data: { age: 25, weightKg: 80, targetWeightKg: 85, activityLevel: "MODERATE" },
+    });
+    const invalidTarget = await dataOf<{ assessment: { nextStep: string; completedSteps: string[] } }>(
+      await routes.sessionGet(new Request(`${appBaseUrl}/api/session`, { headers: { cookie } })),
+    );
+    expect(invalidTarget.assessment.nextStep).toBe("TARGET_WEIGHT");
+    expect(invalidTarget.assessment.completedSteps).not.toContain("TARGET_WEIGHT");
   });
 });
