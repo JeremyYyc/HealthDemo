@@ -51,10 +51,10 @@ describe("P0-01 database invariants", () => {
   it("P0-01-T01 deploys the migration and creates all five tables", async () => {
     const result = await client.query<{ table_name: string }>(
       `SELECT table_name FROM information_schema.tables
-       WHERE table_schema = 'public'
-         AND table_name = ANY($1::text[])
+       WHERE table_schema = $1
+         AND table_name = ANY($2::text[])
        ORDER BY table_name`,
-      [["sessions", "assessments", "assessment_results", "subscriptions", "payments"]],
+      [schemaName, ["sessions", "assessments", "assessment_results", "subscriptions", "payments"]],
     );
     expect(result.rows.map(({ table_name }) => table_name)).toEqual([
       "assessment_results",
