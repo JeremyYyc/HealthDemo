@@ -293,10 +293,12 @@ Every PR and push to `main` runs:
 Deployment is deliberately separate from Serverless startup. Required order:
 
 1. Apply migrations to a temporary database and deploy the exact commit to Preview.
-2. Set Preview `DEMO_REVIEW_CODE` as a GitHub Environment secret and run `Deployment acceptance` with Preview URL/commit.
-3. Only after Preview passes, apply production migration using `DIRECT_URL`, promote the same commit, and run Production acceptance with the Preview run URL recorded.
-4. The smoke checks health, eight saves, complete, Free non-leakage, payment→Full, and paid Session exchange. Its output contains stages and aggregate check names only.
-5. Fill [final acceptance record](docs/delivery/final-acceptance.md). A green merge CI is not Production evidence.
+2. Set `DEPLOYMENT_PREVIEW_URL`, `DEPLOYMENT_PRODUCTION_URL`, and later `DEPLOYMENT_PREVIEW_RUN_URL` as GitHub repository variables. Set `DEMO_REVIEW_CODE` in both GitHub Environments.
+3. Before this workflow reaches `main`, add the `deployment-preview` PR label to invoke its reusable Preview acceptance from the existing CI workflow. Record that successful same-commit Actions run URL in `DEPLOYMENT_PREVIEW_RUN_URL`.
+4. Only after Preview passes, apply the production migration using `DIRECT_URL`, promote the same commit, and add `deployment-production`. Production rejects evidence unless it is a successful same-repository, same-commit Preview acceptance run.
+5. Once the workflow is on `main`, `Deployment acceptance` can also be dispatched manually with the same inputs and verification rules.
+6. The smoke checks health, eight saves, complete, Free non-leakage, payment→Full, and paid Session exchange. Its output contains stages and aggregate check names only.
+7. Fill [final acceptance record](docs/delivery/final-acceptance.md). A green merge CI is not Production evidence.
 
 Manual equivalent:
 
