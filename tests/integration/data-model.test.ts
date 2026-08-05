@@ -490,6 +490,7 @@ describe("P0-01 database invariants", () => {
       expect(applied.rows).toEqual([
         { migration_name: "20260805000000_baseline_schema" },
         { migration_name: "20260805000100_database_invariants" },
+        { migration_name: "20260805000200_shared_rate_limits" },
       ]);
       const after = await legacyClient.query(
         `SELECT assessment_id::text, bmi::text, bmi_category::text, bmr_kcal, tdee_kcal,

@@ -152,3 +152,17 @@ model Payment {
   @@index([assessmentId])
   @@map("payments")
 }
+
+model RateLimitBucket {
+  id            BigInt   @id @default(autoincrement())
+  scope         String   @db.VarChar(64)
+  keyDigest     String   @map("key_digest") @db.VarChar(64)
+  windowStart   DateTime @map("window_start") @db.Timestamptz(3)
+  count         Int      @default(1)
+  expiresAt     DateTime @map("expires_at") @db.Timestamptz(3)
+  updatedAt     DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@unique([scope, keyDigest, windowStart])
+  @@index([expiresAt])
+  @@map("rate_limit_buckets")
+}
