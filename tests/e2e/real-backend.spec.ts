@@ -1,14 +1,6 @@
-import { expect, test, type Page, type Route } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
 test.skip(!process.env.E2E_REAL_BACKEND, "Set E2E_REAL_BACKEND=1 with the test database to run real API browser tests.");
-
-function success(route: Route, data: unknown) {
-  return route.fulfill({
-    status: 200,
-    contentType: "application/json",
-    body: JSON.stringify({ data, meta: { requestId: "req_real_browser" } }),
-  });
-}
 
 async function start(page: Page) {
   await page.goto("/");
@@ -32,21 +24,11 @@ async function reachTargetWeight(page: Page) {
 }
 
 test("P0-04 real T01/T02 uses the session cookie, saves all steps, and restores from PostgreSQL", async ({ page, context }) => {
-  let completed = false;
   let assessmentId = "";
   page.on("request", (request) => {
     const match = new URL(request.url()).pathname.match(/^\/api\/assessments\/([^/]+)\/steps\//);
     if (match) assessmentId = match[1]!;
   });
-  await page.route("**/api/session", (route) => {
-    if (!completed) return route.fallback();
-    return success(route, {
-      sessionId: "browser-real-session",
-      subscriptionStatus: "INACTIVE",
-      assessment: { id: assessmentId, status: "COMPLETED", currentStep: "COMPLETE", nextStep: "COMPLETE", completedSteps: ["AGE_RANGE", "SEX", "GOAL", "AGE", "HEIGHT", "CURRENT_WEIGHT", "TARGET_WEIGHT", "ACTIVITY_LEVEL"], answers: {}, version: 8, actions: ["VIEW_RESULT", "START_NEW"] },
-    });
-  });
-  await page.route("**/api/assessments/*/complete", (route) => { completed = true; return success(route, { assessmentId, status: "COMPLETED" }); });
 
   await reachTargetWeight(page);
   const cookies = await context.cookies();
