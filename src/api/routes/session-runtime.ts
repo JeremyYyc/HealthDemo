@@ -3,6 +3,7 @@ import { SessionService } from "../../services/session-service.js";
 import { AssessmentStepService } from "../../services/assessment-step-service.js";
 import { AssessmentCompletionService } from "../../services/assessment-completion-service.js";
 import { AssessmentResultService } from "../../services/assessment-result-service.js";
+import { DemoPaymentService } from "../../services/demo-payment-service.js";
 
 export const appBaseUrl = process.env.APP_BASE_URL ?? "http://localhost:3000";
 
@@ -32,4 +33,11 @@ export function getAssessmentCompletionService(): AssessmentCompletionService {
 
 export function getAssessmentResultService(): AssessmentResultService {
   return new AssessmentResultService(getPrismaClient(), sessionRuntimeOptions());
+}
+
+export function getDemoPaymentService(): DemoPaymentService {
+  return new DemoPaymentService(getPrismaClient(), {
+    ...sessionRuntimeOptions(),
+    audit: (entry) => console.info("demo_payment", entry),
+  });
 }

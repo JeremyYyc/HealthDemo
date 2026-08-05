@@ -45,7 +45,7 @@ function json(route: Route, status: number, body: unknown) {
 async function mockFunnel(
   page: Page,
   initial: MockState | null,
-  options: { failValidTargetOnce?: boolean; conflictStepOnce?: string; conflictValue?: string | number; failSessionOnce?: boolean; failNewAssessmentOnce?: boolean; result?: Record<string, unknown> } = {},
+  options: { failValidTargetOnce?: boolean; conflictStepOnce?: string; conflictValue?: string | number; failSessionOnce?: boolean; failNewAssessmentOnce?: boolean; result?: Record<string, unknown>; fullResult?: Record<string, unknown>; failPaymentOnce?: boolean; failResultAfterPaymentOnce?: boolean } = {},
 ) {
   let state = initial;
   let validTargetFailed = false;
@@ -53,6 +53,11 @@ async function mockFunnel(
   let sessionFailed = false;
   let newAssessmentFailed = false;
   let newAssessmentRequests = 0;
+  let paymentFailed = false;
+  let paymentSucceeded = false;
+  let resultRefreshFailed = false;
+  const paymentBodies: Record<string, unknown>[] = [];
+  let currentResult = options.result;
   const submittedBodies: Record<string, unknown>[] = [];
   await page.route("**/api/**", async (route) => {
     const request = route.request();
@@ -111,8 +116,27 @@ async function mockFunnel(
       state.assessment.actions = ["VIEW_RESULT", "START_NEW"];
       return json(route, 200, { data: { assessmentId: state.assessment.id, status: "COMPLETED" }, meta: { requestId: "req_e2e" } });
     }
+    if (path === "/api/pay" && request.method() === "POST" && state) {
+      paymentBodies.push(request.postDataJSON() as Record<string, unknown>);
+      if (options.failPaymentOnce && !paymentFailed) {
+        paymentFailed = true;
+        return json(route, 503, { error: { code: "SERVICE_UNAVAILABLE", message: "The service is unavailable.", details: [], requestId: "req_e2e" } });
+      }
+      paymentSucceeded = true;
+      currentResult = options.fullResult ?? {
+        accessLevel: "FULL", bmi: 27.7, bmiCategory: "OVERWEIGHT", summary: "Your estimated BMI is above the general reference range.", isLocked: false, unlockableSections: [], algorithmVersion: "v1",
+        disclaimer: "This assessment is a general wellness estimate for demonstration purposes. It is not medical advice, diagnosis, or a substitute for professional care.",
+        bmrKcal: 1527, tdeeKcal: 2366, recommendedCaloriesKcal: 1866, estimatedWeeks: 20, targetDate: "2026-12-23", calculationDate: "2026-08-05",
+        predictionCurve: [{ week: 0, date: "2026-08-05", weightKg: 80 }], calorieFloorApplied: false,
+      };
+      return json(route, 200, { data: { paymentId: "payment-browser", paymentCreated: !paymentFailed, subscriptionStatus: "ACTIVE", activatedAt: "2026-08-05T12:00:00.000Z" }, meta: { requestId: "req_e2e" } });
+    }
     if (/^\/api\/assessments\/[^/]+\/result$/.test(path) && request.method() === "GET" && state?.assessment.status === "COMPLETED") {
-      const result = options.result ?? {
+      if (paymentSucceeded && options.failResultAfterPaymentOnce && !resultRefreshFailed) {
+        resultRefreshFailed = true;
+        return json(route, 503, { error: { code: "SERVICE_UNAVAILABLE", message: "The service is unavailable.", details: [], requestId: "req_e2e" } });
+      }
+      const result = currentResult ?? {
         assessmentId: state.assessment.id,
         accessLevel: "FREE",
         bmi: 27.7,
@@ -127,7 +151,7 @@ async function mockFunnel(
     }
     return route.fallback();
   });
-  return { getState: () => state, submittedBodies, getNewAssessmentRequests: () => newAssessmentRequests };
+  return { getState: () => state, submittedBodies, paymentBodies, getNewAssessmentRequests: () => newAssessmentRequests };
 }
 
 test("P0-04-T01 new visitor completes eight steps and reaches the free result", async ({ page }) => {
@@ -322,4 +346,36 @@ test("P0-07 full page is rendered only from the Full result response", async ({ 
   await expect(page.getByText("2,366 kcal")).toBeVisible();
   await expect(page.getByText("1,866 kcal")).toBeVisible();
   await expect(page.getByRole("button", { name: "Demo Unlock full report" })).toHaveCount(0);
+});
+
+test("P0-08 payment upgrades the page only after refetching a Full result", async ({ page }) => {
+  const completed = stateAt("COMPLETE"); completed.assessment.status = "COMPLETED";
+  const mocked = await mockFunnel(page, completed);
+  await page.goto("/result");
+  await page.getByRole("button", { name: "Demo Unlock full report" }).click();
+  await expect(page.getByRole("heading", { name: "Your full health report is ready." })).toBeVisible();
+  expect(mocked.paymentBodies).toHaveLength(1);
+  expect(mocked.paymentBodies[0]?.idempotencyKey).toMatch(/^demo_/);
+});
+
+test("P0-08 payment and result-refresh failures preserve Free data and reuse the original key", async ({ page }) => {
+  const failedPayment = stateAt("COMPLETE"); failedPayment.assessment.status = "COMPLETED";
+  const paymentMock = await mockFunnel(page, failedPayment, { failPaymentOnce: true });
+  await page.goto("/result");
+  await page.getByRole("button", { name: "Demo Unlock full report" }).click();
+  await expect(page.getByRole("heading", { name: "Your free health summary is ready." })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Retry Demo Unlock" })).toBeVisible();
+  await page.getByRole("button", { name: "Retry Demo Unlock" }).click();
+  await expect(page.getByRole("heading", { name: "Your full health report is ready." })).toBeVisible();
+  expect(paymentMock.paymentBodies[0]?.idempotencyKey).toBe(paymentMock.paymentBodies[1]?.idempotencyKey);
+
+  const failedRefresh = stateAt("COMPLETE"); failedRefresh.assessment.status = "COMPLETED";
+  const refreshMock = await mockFunnel(page, failedRefresh, { failResultAfterPaymentOnce: true });
+  await page.goto("/result");
+  await page.getByRole("button", { name: "Demo Unlock full report" }).click();
+  await expect(page.getByRole("heading", { name: "Your free health summary is ready." })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Retry Demo Unlock" })).toBeVisible();
+  await page.getByRole("button", { name: "Retry Demo Unlock" }).click();
+  await expect(page.getByRole("heading", { name: "Your full health report is ready." })).toBeVisible();
+  expect(refreshMock.paymentBodies[0]?.idempotencyKey).toBe(refreshMock.paymentBodies[1]?.idempotencyKey);
 });
