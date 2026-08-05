@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { ApiError } from "../api/errors.js";
 
-const schema = z.object({ reviewCode: z.string().min(8).max(256) }).strict();
+const schema = z.object({ reviewCode: z.string() }).strict();
 
 export function parseDemoExchange(body: unknown): { reviewCode: string } {
   const parsed = schema.safeParse(body);

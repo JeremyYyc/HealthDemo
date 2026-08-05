@@ -2,6 +2,7 @@ import type { PrismaClient } from "../generated/prisma/client.js";
 import { constantTimeDigestEquals, digestOpaqueValue } from "../api/auth.js";
 import { ApiError } from "../api/errors.js";
 import { DEMO_EXCHANGE_RATE_LIMIT, enforceRateLimit, PrismaRateLimitStore } from "../api/rate-limit.js";
+import { DEMO_FIXTURE_IDS } from "../domain/demo-fixtures.js";
 import { buildSessionCookie } from "./session-service.js";
 
 interface DemoExchangeOptions {
@@ -31,13 +32,47 @@ export class DemoExchangeService {
     const session = await this.prisma.session.findUnique({
       where: { tokenHash: digestOpaqueValue(paidSessionToken, this.options.tokenSecret) },
       select: {
+        id: true,
         expiresAt: true,
-        subscription: { select: { status: true, activationPayment: { select: { status: true } } } },
-        assessments: { where: { status: "COMPLETED" }, orderBy: [{ completedAt: "desc" }, { id: "desc" }], select: { id: true, result: { select: { id: true } } } },
+        subscription: {
+          select: {
+            id: true,
+            status: true,
+            activatedAt: true,
+            expiresAt: true,
+            activationPaymentId: true,
+            activationPayment: {
+              select: { id: true, sessionId: true, assessmentId: true, status: true, provider: true, paidAt: true },
+            },
+          },
+        },
+        assessments: {
+          where: { id: DEMO_FIXTURE_IDS.paid.assessment, status: "COMPLETED" },
+          select: { id: true, result: { select: { id: true } } },
+        },
       },
     });
-    const assessment = session?.assessments.find(({ result }) => result !== null);
-    if (!session || session.expiresAt <= now || session.subscription?.status !== "ACTIVE" || session.subscription.activationPayment?.status !== "SUCCEEDED" || !assessment) {
+    const subscription = session?.subscription;
+    const payment = subscription?.activationPayment;
+    const assessment = session?.assessments[0];
+    if (
+      !session
+      || session.id !== DEMO_FIXTURE_IDS.paid.session
+      || session.expiresAt <= now
+      || subscription?.id !== DEMO_FIXTURE_IDS.paid.subscription
+      || subscription.status !== "ACTIVE"
+      || !subscription.activatedAt
+      || subscription.expiresAt !== null
+      || subscription.activationPaymentId !== DEMO_FIXTURE_IDS.paid.payment
+      || payment?.id !== DEMO_FIXTURE_IDS.paid.payment
+      || payment.sessionId !== session.id
+      || payment.assessmentId !== DEMO_FIXTURE_IDS.paid.assessment
+      || payment.status !== "SUCCEEDED"
+      || payment.provider !== "DEMO"
+      || !payment.paidAt
+      || assessment?.id !== DEMO_FIXTURE_IDS.paid.assessment
+      || assessment.result?.id !== DEMO_FIXTURE_IDS.paid.result
+    ) {
       throw new ApiError("DEMO_EXCHANGE_UNAVAILABLE");
     }
     return {

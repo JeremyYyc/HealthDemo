@@ -3,17 +3,18 @@ import { writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "../src/generated/prisma/client.js";
+import { DEMO_FIXTURE_IDS } from "../src/domain/demo-fixtures.js";
 import { calculateHealthResult } from "../src/domain/health-calculation.js";
 
-const PAID_SESSION_ID = "10000000-0000-4000-8000-000000000001";
-const PAID_ASSESSMENT_ID = "20000000-0000-4000-8000-000000000001";
-const PAID_RESULT_ID = "30000000-0000-4000-8000-000000000001";
-const PAID_PAYMENT_ID = "40000000-0000-4000-8000-000000000001";
-const PAID_SUBSCRIPTION_ID = "50000000-0000-4000-8000-000000000001";
-const UNPAID_SESSION_ID = "10000000-0000-4000-8000-000000000002";
-const UNPAID_ASSESSMENT_ID = "20000000-0000-4000-8000-000000000002";
-const UNPAID_RESULT_ID = "30000000-0000-4000-8000-000000000002";
-const UNPAID_SUBSCRIPTION_ID = "50000000-0000-4000-8000-000000000002";
+const PAID_SESSION_ID = DEMO_FIXTURE_IDS.paid.session;
+const PAID_ASSESSMENT_ID = DEMO_FIXTURE_IDS.paid.assessment;
+const PAID_RESULT_ID = DEMO_FIXTURE_IDS.paid.result;
+const PAID_PAYMENT_ID = DEMO_FIXTURE_IDS.paid.payment;
+const PAID_SUBSCRIPTION_ID = DEMO_FIXTURE_IDS.paid.subscription;
+const UNPAID_SESSION_ID = DEMO_FIXTURE_IDS.unpaid.session;
+const UNPAID_ASSESSMENT_ID = DEMO_FIXTURE_IDS.unpaid.assessment;
+const UNPAID_RESULT_ID = DEMO_FIXTURE_IDS.unpaid.result;
+const UNPAID_SUBSCRIPTION_ID = DEMO_FIXTURE_IDS.unpaid.subscription;
 
 const connectionString = process.env.DATABASE_URL;
 const tokenSecret = process.env.SESSION_TOKEN_SECRET;
@@ -43,11 +44,16 @@ function resultData(assessmentId: string, resultId: string) {
 try {
   await prisma.$transaction(async (transaction) => {
     const sessionIds = [PAID_SESSION_ID, UNPAID_SESSION_ID];
-    const assessmentIds = [PAID_ASSESSMENT_ID, UNPAID_ASSESSMENT_ID];
+    const assessmentIds = (await transaction.assessment.findMany({
+      where: { sessionId: { in: sessionIds } },
+      select: { id: true },
+    })).map(({ id }) => id);
     await transaction.subscription.deleteMany({ where: { sessionId: { in: sessionIds } } });
-    await transaction.payment.deleteMany({ where: { sessionId: { in: sessionIds } } });
+    await transaction.payment.deleteMany({
+      where: { OR: [{ sessionId: { in: sessionIds } }, { assessmentId: { in: assessmentIds } }] },
+    });
     await transaction.assessmentResult.deleteMany({ where: { assessmentId: { in: assessmentIds } } });
-    await transaction.assessment.deleteMany({ where: { id: { in: assessmentIds } } });
+    await transaction.assessment.deleteMany({ where: { sessionId: { in: sessionIds } } });
     await transaction.session.deleteMany({ where: { id: { in: sessionIds } } });
     await transaction.rateLimitBucket.deleteMany({ where: { scope: "demo-session-exchange" } });
 
