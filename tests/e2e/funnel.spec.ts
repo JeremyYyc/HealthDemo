@@ -7,7 +7,7 @@ const FIELDS = ["ageRange", "sex", "goal", "age", "heightCm", "weightKg", "targe
 type Step = (typeof STEPS)[number];
 type MockState = {
   sessionId: string;
-  subscriptionStatus: "INACTIVE";
+  subscriptionStatus: "INACTIVE" | "ACTIVE" | "EXPIRED";
   assessment: {
     id: string;
     status: "IN_PROGRESS" | "COMPLETED";
@@ -45,7 +45,7 @@ function json(route: Route, status: number, body: unknown) {
 async function mockFunnel(
   page: Page,
   initial: MockState | null,
-  options: { failValidTargetOnce?: boolean; conflictStepOnce?: string; conflictValue?: string | number; failSessionOnce?: boolean; failNewAssessmentOnce?: boolean } = {},
+  options: { failValidTargetOnce?: boolean; conflictStepOnce?: string; conflictValue?: string | number; failSessionOnce?: boolean; failNewAssessmentOnce?: boolean; result?: Record<string, unknown> } = {},
 ) {
   let state = initial;
   let validTargetFailed = false;
@@ -110,6 +110,20 @@ async function mockFunnel(
       state.assessment.status = "COMPLETED";
       state.assessment.actions = ["VIEW_RESULT", "START_NEW"];
       return json(route, 200, { data: { assessmentId: state.assessment.id, status: "COMPLETED" }, meta: { requestId: "req_e2e" } });
+    }
+    if (/^\/api\/assessments\/[^/]+\/result$/.test(path) && request.method() === "GET" && state?.assessment.status === "COMPLETED") {
+      const result = options.result ?? {
+        assessmentId: state.assessment.id,
+        accessLevel: "FREE",
+        bmi: 27.7,
+        bmiCategory: "OVERWEIGHT",
+        summary: "Your estimated BMI is above the general reference range.",
+        isLocked: true,
+        unlockableSections: ["Daily calorie target", "Goal timeline", "Progress forecast"],
+        algorithmVersion: "v1",
+        disclaimer: "This assessment is a general wellness estimate for demonstration purposes. It is not medical advice, diagnosis, or a substitute for professional care.",
+      };
+      return json(route, 200, { data: { ...result, assessmentId: state.assessment.id }, meta: { requestId: "req_e2e" } });
     }
     return route.fallback();
   });
@@ -254,4 +268,58 @@ test("P0-04-T07 unit round trip retains display value and submits normalized met
   await page.getByRole("button", { name: "Continue" }).click();
   await expect(page).toHaveURL(/\/quiz\/current-weight$/);
   expect(mocked.submittedBodies.at(-1)).toMatchObject({ heightCm: 170 });
+});
+
+test("P0-07-T05 free page and API expose BMI value without protected result data", async ({ page }) => {
+  const completed = stateAt("COMPLETE");
+  completed.assessment.status = "COMPLETED";
+  completed.subscriptionStatus = "ACTIVE";
+  const resultResponse = page.waitForResponse((response) => /\/api\/assessments\/[^/]+\/result$/.test(new URL(response.url()).pathname));
+  await mockFunnel(page, completed);
+  const source = await (await page.request.get("/result")).text();
+  for (const protectedField of ["bmrKcal", "tdeeKcal", "recommendedCaloriesKcal", "predictionCurve"]) {
+    expect(source).not.toContain(protectedField);
+  }
+  await page.goto("/result");
+  const apiPayload = await (await resultResponse).json() as { data: Record<string, unknown> };
+  expect(Object.keys(apiPayload.data).sort()).toEqual([
+    "accessLevel", "algorithmVersion", "assessmentId", "bmi", "bmiCategory", "disclaimer", "isLocked", "summary", "unlockableSections",
+  ]);
+  await expect(page.getByRole("heading", { name: "Your free health summary is ready." })).toBeVisible();
+  await expect(page.getByLabel("BMI 27.7, Overweight")).toBeVisible();
+  await expect(page.getByText("Your estimated BMI is above the general reference range.")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Demo Unlock full report" })).toBeVisible();
+  const rendered = await page.content();
+  for (const protectedField of ["bmrKcal", "tdeeKcal", "recommendedCaloriesKcal", "predictionCurve", "2,366", "1,866"]) {
+    expect(rendered).not.toContain(protectedField);
+  }
+});
+
+test("P0-07 full page is rendered only from the Full result response", async ({ page }) => {
+  const completed = stateAt("COMPLETE");
+  completed.assessment.status = "COMPLETED";
+  completed.subscriptionStatus = "INACTIVE";
+  await mockFunnel(page, completed, { result: {
+    accessLevel: "FULL",
+    bmi: 27.7,
+    bmiCategory: "OVERWEIGHT",
+    summary: "Your estimated BMI is above the general reference range.",
+    isLocked: false,
+    unlockableSections: [],
+    algorithmVersion: "v1",
+    disclaimer: "This assessment is a general wellness estimate for demonstration purposes. It is not medical advice, diagnosis, or a substitute for professional care.",
+    bmrKcal: 1527,
+    tdeeKcal: 2366,
+    recommendedCaloriesKcal: 1866,
+    estimatedWeeks: 20,
+    targetDate: "2026-12-23",
+    calculationDate: "2026-08-05",
+    predictionCurve: [{ week: 0, date: "2026-08-05", weightKg: 80 }, { week: 20, date: "2026-12-23", weightKg: 70 }],
+    calorieFloorApplied: false,
+  } });
+  await page.goto("/result");
+  await expect(page.getByRole("heading", { name: "Your full health report is ready." })).toBeVisible();
+  await expect(page.getByText("2,366 kcal")).toBeVisible();
+  await expect(page.getByText("1,866 kcal")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Demo Unlock full report" })).toHaveCount(0);
 });

@@ -2,6 +2,7 @@ import { getPrismaClient } from "../../database/prisma.js";
 import { SessionService } from "../../services/session-service.js";
 import { AssessmentStepService } from "../../services/assessment-step-service.js";
 import { AssessmentCompletionService } from "../../services/assessment-completion-service.js";
+import { AssessmentResultService } from "../../services/assessment-result-service.js";
 
 export const appBaseUrl = process.env.APP_BASE_URL ?? "http://localhost:3000";
 
@@ -27,4 +28,8 @@ export function getAssessmentStepService(): AssessmentStepService {
 
 export function getAssessmentCompletionService(): AssessmentCompletionService {
   return new AssessmentCompletionService(getPrismaClient(), sessionRuntimeOptions());
+}
+
+export function getAssessmentResultService(): AssessmentResultService {
+  return new AssessmentResultService(getPrismaClient(), sessionRuntimeOptions());
 }
