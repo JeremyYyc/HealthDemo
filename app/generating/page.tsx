@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation.js";
-import { apiRequest, ClientApiError, stepPath } from "../../src/ui/session.js";
+import { apiRequest, ClientApiError, hasSeenSession, stepPath } from "../../src/ui/session.js";
 import { LoadingCard, PageShell, SessionFailure } from "../../src/ui/shell.js";
 import { useSession } from "../../src/ui/use-session.js";
 
@@ -37,6 +37,12 @@ export default function GeneratingPage() {
     if (session.assessment.nextStep !== "COMPLETE") { router.replace(stepPath(session.assessment.nextStep)); return; }
     void complete();
   });
+
+  useEffect(() => {
+    if (!loading && sessionError?.code === "SESSION_REQUIRED") {
+      router.replace(hasSeenSession() ? "/?lost=1" : "/");
+    }
+  }, [loading, router, sessionError]);
 
   if (loading) return <PageShell narrow><LoadingCard label="Calculating your health direction…" /></PageShell>;
   if (!session) return <PageShell narrow><SessionFailure message={sessionError?.message ?? "The session could not be restored."} retry={() => void refresh()} /></PageShell>;

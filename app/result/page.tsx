@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation.js";
 import { LoadingCard, PageShell, SessionFailure } from "../../src/ui/shell.js";
-import { apiRequest, ClientApiError, guardPath, stepPath, type AssessmentView } from "../../src/ui/session.js";
+import { apiRequest, ClientApiError, guardPath, hasSeenSession, stepPath, type AssessmentView } from "../../src/ui/session.js";
 import { useSession } from "../../src/ui/use-session.js";
 
 export default function ResultPage() {
@@ -17,6 +17,11 @@ export default function ResultPage() {
     const destination = guardPath(session, "result");
     if (destination) router.replace(destination);
   }, [router, session]);
+  useEffect(() => {
+    if (!loading && sessionError?.code === "SESSION_REQUIRED") {
+      router.replace(hasSeenSession() ? "/?lost=1" : "/");
+    }
+  }, [loading, router, sessionError]);
   async function startNew() {
     if (startingRef.current) return;
     startingRef.current = true;

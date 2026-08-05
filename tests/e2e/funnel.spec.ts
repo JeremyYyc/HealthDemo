@@ -196,6 +196,17 @@ test("P0-04 starting a new assessment is single-flight and recoverable", async (
   expect(mocked.getNewAssessmentRequests()).toBe(2);
 });
 
+test("P0-04 unauthenticated generating and result routes enter the first-or-lost session flow", async ({ page }) => {
+  await mockFunnel(page, null);
+  await page.goto("/result");
+  await expect(page).toHaveURL(/\/$/);
+  await expect(page.getByRole("heading", { name: "What is your age range?" })).toBeVisible();
+  await page.evaluate(() => localStorage.setItem("hasSeenSession", "true"));
+  await page.goto("/generating");
+  await expect(page).toHaveURL(/\/\?lost=1$/);
+  await expect(page.getByRole("heading", { name: "Your previous progress can’t be restored" })).toBeVisible();
+});
+
 test("P0-04-T04 only a returning browser sees the lost-session explanation", async ({ page }) => {
   await mockFunnel(page, null);
   await page.goto("/");
