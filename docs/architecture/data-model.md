@@ -52,6 +52,6 @@ Additional invariants:
 
 ## Migration and rollback policy
 
-Production uses `prisma migrate deploy`; `db push` and destructive resets are prohibited. Migrations are additive and forward-only. If the application must roll back, deploy the previous compatible application first and retain the migrated database. A database rollback requires a separately reviewed compensating migration; this initial migration has no destructive automatic down migration.
+Production uses `prisma migrate deploy`; `db push` and destructive resets are prohibited. Migrations are additive and forward-only. If the application must roll back, deploy the previous compatible application first and retain the migrated database. A database rollback requires a separately reviewed compensating migration; these initial migrations have no destructive automatic down migration.
 
 The migration history is deliberately split into a portable baseline schema and a following PostgreSQL-invariants migration. This allows CI to baseline an existing previous schema, insert a historical Result snapshot, apply a migration that actually changes the catalog, and prove the snapshot remains byte-for-byte equivalent at the SQL value level.

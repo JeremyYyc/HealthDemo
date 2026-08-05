@@ -38,7 +38,7 @@ async function createAssessment(sessionId: string, status = "IN_PROGRESS"): Prom
 async function createPayment(
   sessionId: string,
   assessmentId: string,
-  status: "FAILED" | "SUCCEEDED",
+  status: "FAILED" | "PENDING" | "SUCCEEDED",
   idempotencyKey: string,
 ): Promise<void> {
   await client.query(
@@ -199,53 +199,167 @@ describe("P0-01 database invariants", () => {
       SubscriptionStatus: ["INACTIVE", "ACTIVE", "EXPIRED"],
     });
 
-    const indexes = await client.query<{ indexname: string; indexdef: string }>(
-      `SELECT indexname, indexdef FROM pg_indexes
-        WHERE schemaname = $1 AND tablename = ANY($2::text[])
-        ORDER BY indexname`,
+    const indexes = await client.query<{
+      index_name: string;
+      is_unique: boolean;
+      columns: string[];
+      predicate: string | null;
+    }>(
+      `SELECT idx.relname AS index_name,
+              i.indisunique AS is_unique,
+              array_agg(att.attname ORDER BY key.ordinality)::text[] AS columns,
+              pg_get_expr(i.indpred, i.indrelid, true) AS predicate
+         FROM pg_index i
+         JOIN pg_class tbl ON tbl.oid = i.indrelid
+         JOIN pg_namespace n ON n.oid = tbl.relnamespace
+         JOIN pg_class idx ON idx.oid = i.indexrelid
+         JOIN LATERAL unnest(i.indkey) WITH ORDINALITY AS key(attnum, ordinality) ON true
+         JOIN pg_attribute att ON att.attrelid = tbl.oid AND att.attnum = key.attnum
+        WHERE n.nspname = $1 AND tbl.relname = ANY($2::text[])
+        GROUP BY idx.relname, i.indisunique, i.indpred, i.indrelid
+        ORDER BY idx.relname`,
       [schemaName, tables],
     );
-    const indexDefinitions = Object.fromEntries(indexes.rows.map(({ indexname, indexdef }) => [indexname, indexdef]));
-    expect(Object.keys(indexDefinitions)).toEqual([
-      "assessment_results_assessment_id_key",
-      "assessment_results_pkey",
-      "assessments_one_in_progress_per_session",
-      "assessments_pkey",
-      "assessments_session_id_status_idx",
-      "payments_assessment_id_idx",
-      "payments_one_succeeded_per_session",
-      "payments_pkey",
-      "payments_session_id_idempotency_key_key",
-      "payments_transaction_id_key",
-      "sessions_pkey",
-      "sessions_token_hash_key",
-      "subscriptions_activation_payment_id_key",
-      "subscriptions_pkey",
-      "subscriptions_session_id_key",
-    ]);
-    expect(indexDefinitions.assessments_one_in_progress_per_session).toContain("UNIQUE");
-    expect(indexDefinitions.assessments_one_in_progress_per_session).toContain("IN_PROGRESS");
-    expect(indexDefinitions.payments_one_succeeded_per_session).toContain("UNIQUE");
-    expect(indexDefinitions.payments_one_succeeded_per_session).toContain("SUCCEEDED");
-    expect(indexDefinitions.payments_session_id_idempotency_key_key).toContain("session_id, idempotency_key");
+    expect(Object.fromEntries(indexes.rows.map(({ index_name, ...definition }) => [index_name, definition]))).toEqual({
+      assessment_results_assessment_id_key: {
+        is_unique: true,
+        columns: ["assessment_id"],
+        predicate: null,
+      },
+      assessment_results_pkey: { is_unique: true, columns: ["id"], predicate: null },
+      assessments_one_in_progress_per_session: {
+        is_unique: true,
+        columns: ["session_id"],
+        predicate: "status = 'IN_PROGRESS'::\"AssessmentStatus\"",
+      },
+      assessments_pkey: { is_unique: true, columns: ["id"], predicate: null },
+      assessments_session_id_status_idx: {
+        is_unique: false,
+        columns: ["session_id", "status"],
+        predicate: null,
+      },
+      payments_assessment_id_idx: { is_unique: false, columns: ["assessment_id"], predicate: null },
+      payments_one_succeeded_per_session: {
+        is_unique: true,
+        columns: ["session_id"],
+        predicate: "status = 'SUCCEEDED'::\"PaymentStatus\"",
+      },
+      payments_pkey: { is_unique: true, columns: ["id"], predicate: null },
+      payments_session_id_idempotency_key_key: {
+        is_unique: true,
+        columns: ["session_id", "idempotency_key"],
+        predicate: null,
+      },
+      payments_transaction_id_key: { is_unique: true, columns: ["transaction_id"], predicate: null },
+      sessions_pkey: { is_unique: true, columns: ["id"], predicate: null },
+      sessions_token_hash_key: { is_unique: true, columns: ["token_hash"], predicate: null },
+      subscriptions_activation_payment_id_key: {
+        is_unique: true,
+        columns: ["activation_payment_id"],
+        predicate: null,
+      },
+      subscriptions_pkey: { is_unique: true, columns: ["id"], predicate: null },
+      subscriptions_session_id_key: { is_unique: true, columns: ["session_id"], predicate: null },
+    });
 
-    const foreignKeys = await client.query<{ constraint_name: string; delete_action: string }>(
-      `SELECT con.conname AS constraint_name, con.confdeltype AS delete_action
+    const foreignKeys = await client.query<{
+      constraint_name: string;
+      source_table: string;
+      source_columns: string[];
+      target_table: string;
+      target_columns: string[];
+      update_action: string;
+      delete_action: string;
+    }>(
+      `SELECT con.conname AS constraint_name,
+              source.relname AS source_table,
+              ARRAY(
+                SELECT att.attname
+                  FROM unnest(con.conkey) WITH ORDINALITY AS key(attnum, ordinality)
+                  JOIN pg_attribute att ON att.attrelid = con.conrelid AND att.attnum = key.attnum
+                 ORDER BY key.ordinality
+              )::text[] AS source_columns,
+              target.relname AS target_table,
+              ARRAY(
+                SELECT att.attname
+                  FROM unnest(con.confkey) WITH ORDINALITY AS key(attnum, ordinality)
+                  JOIN pg_attribute att ON att.attrelid = con.confrelid AND att.attnum = key.attnum
+                 ORDER BY key.ordinality
+              )::text[] AS target_columns,
+              con.confupdtype AS update_action,
+              con.confdeltype AS delete_action
          FROM pg_constraint con
-         JOIN pg_class rel ON rel.oid = con.conrelid
-         JOIN pg_namespace n ON n.oid = rel.relnamespace
+         JOIN pg_class source ON source.oid = con.conrelid
+         JOIN pg_class target ON target.oid = con.confrelid
+         JOIN pg_namespace n ON n.oid = source.relnamespace
         WHERE n.nspname = $1 AND con.contype = 'f'
         ORDER BY con.conname`,
       [schemaName],
     );
     expect(foreignKeys.rows).toEqual([
-      { constraint_name: "assessment_results_assessment_id_fkey", delete_action: "r" },
-      { constraint_name: "assessments_session_id_fkey", delete_action: "r" },
-      { constraint_name: "payments_assessment_id_fkey", delete_action: "r" },
-      { constraint_name: "payments_session_id_fkey", delete_action: "r" },
-      { constraint_name: "subscriptions_activation_payment_id_fkey", delete_action: "r" },
-      { constraint_name: "subscriptions_session_id_fkey", delete_action: "r" },
+      {
+        constraint_name: "assessment_results_assessment_id_fkey",
+        source_table: "assessment_results",
+        source_columns: ["assessment_id"],
+        target_table: "assessments",
+        target_columns: ["id"],
+        update_action: "c",
+        delete_action: "r",
+      },
+      {
+        constraint_name: "assessments_session_id_fkey",
+        source_table: "assessments",
+        source_columns: ["session_id"],
+        target_table: "sessions",
+        target_columns: ["id"],
+        update_action: "c",
+        delete_action: "r",
+      },
+      {
+        constraint_name: "payments_assessment_id_fkey",
+        source_table: "payments",
+        source_columns: ["assessment_id"],
+        target_table: "assessments",
+        target_columns: ["id"],
+        update_action: "c",
+        delete_action: "r",
+      },
+      {
+        constraint_name: "payments_session_id_fkey",
+        source_table: "payments",
+        source_columns: ["session_id"],
+        target_table: "sessions",
+        target_columns: ["id"],
+        update_action: "c",
+        delete_action: "r",
+      },
+      {
+        constraint_name: "subscriptions_activation_payment_id_fkey",
+        source_table: "subscriptions",
+        source_columns: ["activation_payment_id"],
+        target_table: "payments",
+        target_columns: ["id"],
+        update_action: "c",
+        delete_action: "r",
+      },
+      {
+        constraint_name: "subscriptions_session_id_fkey",
+        source_table: "subscriptions",
+        source_columns: ["session_id"],
+        target_table: "sessions",
+        target_columns: ["id"],
+        update_action: "c",
+        delete_action: "r",
+      },
     ]);
+
+    const defaultExpiry = await client.query<{ lifetime_seconds: string }>(
+      `INSERT INTO sessions (token_hash, updated_at)
+       VALUES ($1, CURRENT_TIMESTAMP)
+       RETURNING EXTRACT(EPOCH FROM (expires_at - created_at))::text AS lifetime_seconds`,
+      [randomUUID()],
+    );
+    expect(defaultExpiry.rows).toEqual([{ lifetime_seconds: "2592000.000000" }]);
   });
 
   it("P0-01-T02 enforces one in-progress assessment per Session without becoming global", async () => {
@@ -278,6 +392,8 @@ describe("P0-01 database invariants", () => {
     });
     await expect(createPayment(firstSession, firstAssessment, "FAILED", "failed-key-1")).resolves.toBeUndefined();
     await expect(createPayment(firstSession, firstAssessment, "FAILED", "failed-key-2")).resolves.toBeUndefined();
+    await expect(createPayment(firstSession, firstAssessment, "PENDING", "pending-key-1")).resolves.toBeUndefined();
+    await expect(createPayment(firstSession, firstAssessment, "PENDING", "pending-key-2")).resolves.toBeUndefined();
 
     const secondSession = await createSession();
     const secondAssessment = await createAssessment(secondSession, "COMPLETED");
