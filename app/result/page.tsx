@@ -106,6 +106,8 @@ export default function ResultPage() {
   }
 
   useEffect(() => {
+    // The protected result can only be loaded in the browser after Session restoration.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void loadResult();
   }, [loadResult]);
 

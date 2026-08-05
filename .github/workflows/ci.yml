@@ -20,6 +20,7 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run check
+      - run: npm run build
 
   postgres-integration:
     runs-on: ubuntu-latest
@@ -48,6 +49,40 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run test:integration
+
+  coverage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: health_demo
+          POSTGRES_PASSWORD: health_demo
+          POSTGRES_DB: health_demo_coverage
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U health_demo -d health_demo_coverage"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 20
+    env:
+      TEST_DATABASE_URL: postgresql://health_demo:health_demo@localhost:5432/health_demo_coverage?schema=public
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run test:coverage
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-report
+          path: coverage/
+          retention-days: 14
 
   browser-e2e:
     runs-on: ubuntu-latest
@@ -81,3 +116,70 @@ jobs:
       - run: npm ci
       - run: npx playwright install --with-deps chromium webkit
       - run: npm run test:e2e
+
+  deployment-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: health_demo
+          POSTGRES_PASSWORD: health_demo
+          POSTGRES_DB: health_demo_smoke
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U health_demo -d health_demo_smoke"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 20
+    env:
+      DATABASE_URL: postgresql://health_demo:health_demo@localhost:5432/health_demo_smoke?schema=public
+      SESSION_TOKEN_SECRET: smoke-ci-session-secret-at-least-32-characters
+      SESSION_COOKIE_SECURE: "false"
+      APP_BASE_URL: http://127.0.0.1:3100
+      SMOKE_BASE_URL: http://127.0.0.1:3100
+      SMOKE_ENVIRONMENT: ci
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run prisma:generate
+      - run: npm run db:migrate
+      - run: npm run build
+      - name: Run API delivery smoke
+        run: |
+          npm run start -- --hostname 127.0.0.1 --port 3100 > /tmp/health-demo-server.log 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid"' EXIT
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent --output /dev/null http://127.0.0.1:3100/api/health; then
+              break
+            fi
+            sleep 1
+          done
+          curl --fail --silent --output /dev/null http://127.0.0.1:3100/api/health
+          npm run smoke:deployment
+
+  quality-gate:
+    if: always()
+    needs: [check, postgres-integration, coverage, browser-e2e, deployment-smoke]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every P0 delivery check
+        env:
+          CHECK_RESULT: ${{ needs.check.result }}
+          INTEGRATION_RESULT: ${{ needs.postgres-integration.result }}
+          COVERAGE_RESULT: ${{ needs.coverage.result }}
+          E2E_RESULT: ${{ needs.browser-e2e.result }}
+          SMOKE_RESULT: ${{ needs.deployment-smoke.result }}
+        run: |
+          test "$CHECK_RESULT" = success
+          test "$INTEGRATION_RESULT" = success
+          test "$COVERAGE_RESULT" = success
+          test "$E2E_RESULT" = success
+          test "$SMOKE_RESULT" = success

@@ -1,0 +1,77 @@
+name: Deployment acceptance
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Target environment
+        required: true
+        type: choice
+        options: [preview, production]
+      target_url:
+        description: Exact HTTPS deployment origin
+        required: true
+        type: string
+      commit_sha:
+        description: Deployed commit SHA
+        required: true
+        type: string
+      preview_run_url:
+        description: Required production evidence; use N/A for preview
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  checks: read
+
+jobs:
+  validate-release-order:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require Preview evidence before Production
+        env:
+          TARGET_ENVIRONMENT: ${{ inputs.environment }}
+          TARGET_URL: ${{ inputs.target_url }}
+          PREVIEW_RUN_URL: ${{ inputs.preview_run_url }}
+        run: |
+          case "$TARGET_URL" in
+            https://*) ;;
+            *) exit 1 ;;
+          esac
+          if [ "$TARGET_ENVIRONMENT" = production ]; then
+            test -n "$PREVIEW_RUN_URL"
+            test "$PREVIEW_RUN_URL" != N/A
+            case "$PREVIEW_RUN_URL" in
+              https://github.com/*/actions/runs/*) ;;
+              *) exit 1 ;;
+            esac
+          fi
+      - name: Require the deployed commit quality gate
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEPLOYED_SHA: ${{ inputs.commit_sha }}
+        run: |
+          conclusion=$(gh api "repos/${GITHUB_REPOSITORY}/commits/${DEPLOYED_SHA}/check-runs" \
+            --jq '.check_runs[] | select(.name == "quality-gate") | .conclusion' | head -n 1)
+          test "$conclusion" = success
+
+  smoke:
+    needs: validate-release-order
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    env:
+      SMOKE_BASE_URL: ${{ inputs.target_url }}
+      SMOKE_ENVIRONMENT: ${{ inputs.environment }}
+      SMOKE_REVIEW_CODE: ${{ secrets.DEMO_REVIEW_CODE }}
+      SMOKE_REQUIRE_DEMO_EXCHANGE: "true"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.commit_sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run smoke:deployment

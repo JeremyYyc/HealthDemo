@@ -23,7 +23,7 @@ export function createHealthRoute(options: {
   return (request) =>
     handleApiRequest(
       request,
-      async (_healthRequest, context) => {
+      async () => {
         try {
           await options.database.check();
         } catch {

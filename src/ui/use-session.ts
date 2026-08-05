@@ -30,6 +30,8 @@ export function useSession() {
   }, []);
 
   useEffect(() => {
+    // Session state is deliberately hydrated from the HttpOnly Cookie after mount.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void refresh(true);
   }, [refresh]);
 
