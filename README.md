@@ -294,7 +294,7 @@ Every PR and push to `main` runs:
 
 Deployment is deliberately separate from Serverless startup. Required order:
 
-1. Apply migrations to a temporary database and deploy the exact commit to Preview.
+1. Apply migrations to a temporary database and deploy the exact commit to Preview, with `APP_VERSION` set to its full commit SHA. Acceptance fails if `/api/health` reports any other version.
 2. Set `DEPLOYMENT_PREVIEW_URL`, `DEPLOYMENT_PRODUCTION_URL`, and later `DEPLOYMENT_PREVIEW_RUN_URL` as GitHub repository variables. Set `DEMO_REVIEW_CODE` in both GitHub Environments.
 3. Before this workflow reaches `main`, add the `deployment-preview` PR label to invoke its reusable Preview acceptance from the existing CI workflow. Record that successful same-commit Actions run URL in `DEPLOYMENT_PREVIEW_RUN_URL`.
 4. Only after Preview passes, apply the production migration using `DIRECT_URL`, promote the same commit, and add `deployment-production`. Production rejects evidence unless it is a successful same-repository, same-commit Preview acceptance run.
@@ -307,6 +307,7 @@ Manual equivalent:
 ```bash
 SMOKE_BASE_URL="https://your-preview-or-production.example" \
 SMOKE_ENVIRONMENT="preview" \
+SMOKE_EXPECTED_COMMIT_SHA="the-full-deployed-commit-sha" \
 SMOKE_REVIEW_CODE="the-controlled-review-code" \
 SMOKE_REQUIRE_DEMO_EXCHANGE=true \
 npm run smoke:deployment

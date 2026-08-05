@@ -1,7 +1,9 @@
 import { randomUUID } from "node:crypto";
+import { pathToFileURL } from "node:url";
 
 const baseUrl = process.env.SMOKE_BASE_URL;
 const environment = process.env.SMOKE_ENVIRONMENT ?? "unspecified";
+const expectedCommitSha = process.env.SMOKE_EXPECTED_COMMIT_SHA;
 const reviewCode = process.env.SMOKE_REVIEW_CODE;
 const requireDemoExchange = process.env.SMOKE_REQUIRE_DEMO_EXCHANGE === "true";
 const protectedFields = ["bmrKcal", "tdeeKcal", "recommendedCaloriesKcal", "estimatedWeeks", "targetDate", "calculationDate", "predictionCurve", "calorieFloorApplied"];
@@ -53,11 +55,16 @@ function requireFields(stage, value, fields) {
   if (!value || fields.some((field) => !(field in value))) throw new SmokeFailure(stage);
 }
 
+export function isExpectedDeploymentVersion(appVersion, expectedVersion) {
+  return !expectedVersion || appVersion === expectedVersion;
+}
+
 async function run() {
   const checks = [];
   const health = await call("health", "/api/health");
   requireFields("health", health, ["status", "database", "appVersion"]);
   if (health.status !== "ok" || health.database !== "reachable") throw new SmokeFailure("health");
+  if (!isExpectedDeploymentVersion(health.appVersion, expectedCommitSha)) throw new SmokeFailure("health-version");
   checks.push("health");
 
   const jar = { cookie: "" };
@@ -107,10 +114,12 @@ async function run() {
   console.info(JSON.stringify({ version: "deployment-smoke/v1", environment, outcome: "SUCCEEDED", checks }));
 }
 
-try {
-  await run();
-} catch (error) {
-  const failure = error instanceof SmokeFailure ? error : new SmokeFailure("unexpected");
-  console.error(JSON.stringify({ version: "deployment-smoke/v1", environment, outcome: "FAILED", stage: failure.stage, status: failure.status, code: failure.code }));
-  process.exitCode = 1;
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  try {
+    await run();
+  } catch (error) {
+    const failure = error instanceof SmokeFailure ? error : new SmokeFailure("unexpected");
+    console.error(JSON.stringify({ version: "deployment-smoke/v1", environment, outcome: "FAILED", stage: failure.stage, status: failure.status, code: failure.code }));
+    process.exitCode = 1;
+  }
 }

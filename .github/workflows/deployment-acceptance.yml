@@ -106,6 +106,7 @@ jobs:
     env:
       SMOKE_BASE_URL: ${{ inputs.target_url }}
       SMOKE_ENVIRONMENT: ${{ inputs.environment }}
+      SMOKE_EXPECTED_COMMIT_SHA: ${{ inputs.commit_sha }}
       SMOKE_REVIEW_CODE: ${{ secrets.DEMO_REVIEW_CODE }}
       SMOKE_REQUIRE_DEMO_EXCHANGE: "true"
     steps:
