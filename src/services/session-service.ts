@@ -32,6 +32,10 @@ const DATABASE_TO_AGE_RANGE: Record<AgeRange, ApiAgeRange> = {
   [AgeRange.AGE_50_100]: "50_100",
 };
 
+export function toDatabaseAgeRange(value: ApiAgeRange): AgeRange {
+  return AGE_RANGE_TO_DATABASE[value];
+}
+
 const assessmentSelection = {
   id: true,
   status: true,
@@ -77,7 +81,7 @@ function validMetric(value: number | null, minimum: number, maximum: number): bo
   return value !== null && Number.isFinite(value) && value >= minimum && value <= maximum;
 }
 
-function ageMatchesRange(age: number | null, ageRange: AgeRange | null): boolean {
+export function ageMatchesRange(age: number | null, ageRange: AgeRange | null): boolean {
   if (age === null || ageRange === null || !Number.isInteger(age)) return false;
   const bounds: Record<AgeRange, readonly [number, number]> = {
     [AgeRange.AGE_18_29]: [18, 29],
@@ -89,12 +93,15 @@ function ageMatchesRange(age: number | null, ageRange: AgeRange | null): boolean
   return age >= minimum && age <= maximum;
 }
 
-function validTarget(assessment: SelectedAssessment): boolean {
-  const heightCm = assessment.heightCm?.toNumber() ?? null;
-  const weightKg = assessment.weightKg?.toNumber() ?? null;
-  const targetWeightKg = assessment.targetWeightKg?.toNumber() ?? null;
+export function validTargetValues(input: {
+  goal: "LOSE_WEIGHT" | "MAINTAIN_WEIGHT" | "GAIN_WEIGHT" | null;
+  heightCm: number | null;
+  weightKg: number | null;
+  targetWeightKg: number | null;
+}): boolean {
+  const { heightCm, weightKg, targetWeightKg } = input;
   if (
-    assessment.goal === null ||
+    input.goal === null ||
     heightCm === null ||
     weightKg === null ||
     targetWeightKg === null ||
@@ -107,18 +114,27 @@ function validTarget(assessment: SelectedAssessment): boolean {
   const weightHundredths = Math.round(weightKg * 100);
   const targetWeightHundredths = Math.round(targetWeightKg * 100);
   const differenceHundredths = targetWeightHundredths - weightHundredths;
-  if (assessment.goal === "LOSE_WEIGHT" && differenceHundredths >= 0) return false;
-  if (assessment.goal === "GAIN_WEIGHT" && differenceHundredths <= 0) return false;
-  if (assessment.goal === "MAINTAIN_WEIGHT" && Math.abs(differenceHundredths) > 200) return false;
+  if (input.goal === "LOSE_WEIGHT" && differenceHundredths >= 0) return false;
+  if (input.goal === "GAIN_WEIGHT" && differenceHundredths <= 0) return false;
+  if (input.goal === "MAINTAIN_WEIGHT" && Math.abs(differenceHundredths) > 200) return false;
 
   const heightTenths = Math.round(heightCm * 10);
   const targetWeightTenths = Math.round(targetWeightKg * 10);
   const bmiNumerator = targetWeightTenths * 100_000;
   const squaredHeightTenths = heightTenths ** 2;
   if (bmiNumerator < 15 * squaredHeightTenths || bmiNumerator > 50 * squaredHeightTenths) return false;
-  if (assessment.goal === "MAINTAIN_WEIGHT") return true;
-  const weeklyRateHundredths = assessment.goal === "LOSE_WEIGHT" ? 50 : 25;
+  if (input.goal === "MAINTAIN_WEIGHT") return true;
+  const weeklyRateHundredths = input.goal === "LOSE_WEIGHT" ? 50 : 25;
   return Math.ceil(Math.abs(differenceHundredths) / weeklyRateHundredths) <= 104;
+}
+
+function validTarget(assessment: SelectedAssessment): boolean {
+  return validTargetValues({
+    goal: assessment.goal,
+    heightCm: assessment.heightCm?.toNumber() ?? null,
+    weightKg: assessment.weightKg?.toNumber() ?? null,
+    targetWeightKg: assessment.targetWeightKg?.toNumber() ?? null,
+  });
 }
 
 function answerEntries(assessment: SelectedAssessment): AnswerEntry[] {

@@ -7,7 +7,11 @@ export interface JsonWriteContext extends RequestContext {
   body: unknown;
 }
 
-export type JsonWriteHandler = (request: Request, context: JsonWriteContext) => Promise<ApiSuccess>;
+export type JsonWriteHandler<RouteContext = unknown> = (
+  request: Request,
+  context: JsonWriteContext,
+  routeContext: RouteContext | undefined,
+) => Promise<ApiSuccess>;
 
 function parseOrigin(value: string, field: "request" | "configured"): string {
   try {
@@ -96,21 +100,21 @@ export async function parseProtectedJson(
   }
 }
 
-export function createJsonWriteRoute(
-  handler: JsonWriteHandler,
+export function createJsonWriteRoute<RouteContext = unknown>(
+  handler: JsonWriteHandler<RouteContext>,
   options: {
     appBaseUrl: string;
     maximumBytes?: number;
     createRequestId?: () => string;
     logger?: SafeLogger;
   },
-): (request: Request) => Promise<Response> {
-  return (request) =>
+): (request: Request, routeContext?: RouteContext) => Promise<Response> {
+  return (request, routeContext) =>
     handleApiRequest(
       request,
       async (guardedRequest, context) => {
         const body = await parseProtectedJson(guardedRequest, options);
-        return handler(guardedRequest, { ...context, body });
+        return handler(guardedRequest, { ...context, body }, routeContext);
       },
       {
         ...(options.createRequestId ? { createRequestId: options.createRequestId } : {}),
