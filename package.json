@@ -10,7 +10,7 @@
     "prisma:generate": "prisma generate",
     "db:migrate": "prisma migrate deploy",
     "test": "vitest run --passWithNoTests --exclude 'tests/integration/**'",
-    "test:integration": "vitest run tests/integration",
+    "test:integration": "npm run prisma:generate && vitest run tests/integration",
     "typecheck": "tsc --noEmit",
     "check": "npm run prisma:generate && npm run typecheck && npm test"
   },
