@@ -4,20 +4,20 @@ This record must contain observed evidence only. Do not mark a pending item as p
 
 | Field | Evidence |
 |---|---|
-| Commit SHA | Local cold-clone acceptance: `b7ce76f348a27cf42d5119a46caa60bb740abbb0`; final merge pending |
-| Production URL | Pending external deployment |
-| Preview acceptance run | Pending external deployment |
-| Production acceptance run | Pending external deployment |
-| CI run | PR #12 quality gate pending for latest head |
-| Test counts/results | Cold clone passed: check 22/22; integration 47/47; coverage 69/69; Chromium/WebKit E2E 40/40; build passed; npm audit 0 vulnerabilities |
-| Paid Session smoke | Local cold-clone smoke passed all five checks; external Preview/Production smoke pending |
-| Smoke operator/time (UTC) | Codex local acceptance, 2026-08-05T11:09:59Z; external operator/time pending |
-| Known limitations | See README; update with observed deployment limits |
-| All P0 satisfied | No — external Preview/Production evidence pending |
-| Monitoring/alert recheck | Pending external deployment |
-| Rollback recheck | Pending external deployment |
-| Observation/review time | Pending external deployment |
-| Release operator | Pending owner assignment |
+| Commit SHA | Deployed application artifact: `802c0697d1c6a608994be3c5ca4b4c845d77c792`; final evidence-only documentation head and merge pending |
+| Production URL | `https://health-demo-opal.vercel.app` (`READY`, Vercel Deployment Protection enabled) |
+| Preview acceptance run | `https://github.com/JeremyYyc/HealthDemo/actions/runs/31091530119` — succeeded for the deployed SHA |
+| Production acceptance run | `https://github.com/JeremyYyc/HealthDemo/actions/runs/31091821522` — succeeded after validating the Preview evidence and deployed SHA |
+| CI run | `https://github.com/JeremyYyc/HealthDemo/actions/runs/31091340931` — all jobs and `quality-gate` succeeded; the two acceptance runs repeated the same complete CI successfully |
+| Test counts/results | Cold clone passed: check 22/22; integration 47/47; coverage 69/69; Chromium/WebKit E2E 40/40; build passed; npm audit 0 vulnerabilities. External CI, Preview smoke, and Production smoke succeeded. |
+| Paid Session smoke | Passed in local cold clone, Preview, Production, and the post-rollback Production smoke |
+| Smoke operator/time (UTC) | GitHub Actions/Codex under repository-owner authorization; Production acceptance 2026-08-06T10:06:06Z; post-rollback smoke 2026-08-06T10:20:12Z |
+| Known limitations | See README: protected browser access, unmeasured free-tier cold-start/connection/capacity limits, and no production-scale load claim |
+| All P0 satisfied | No — 12-hour observation, final evidence update/review, and PR merge remain |
+| Monitoring/alert recheck | Initial Production acceptance and second full post-rollback smoke passed within the first 30 minutes; 2-hour and 12-hour checks pending |
+| Rollback recheck | Passed: promoted the same-SHA artifact as `dpl_6BaNiACwE8mcwWHyQ46gjwteCKCU`, rolled back to previously smoke-passed `dpl_5VEizQb48J86jSvHrxKctNYaZvij`, confirmed alias/SHA/database health, then passed all five smoke checks at 2026-08-06T10:20:12Z |
+| Observation/review time | Started 2026-08-06T10:06:06Z; 12-hour checkpoint due 2026-08-06T22:06:06Z; review completion also required if later |
+| Release operator | Codex under explicit authorization from repository owner JeremyYyc |
 
 ## Release update procedure
 

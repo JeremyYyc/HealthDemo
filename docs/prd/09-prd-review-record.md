@@ -1,10 +1,10 @@
 # PRD Review 记录
 
-> 版本：v1.0  
-> Review 日期：2026-08-05  
+> 版本：v1.1
+> Review 日期：2026-08-06
 > Review 基准：`PRD Review 检查清单.md`  
 > 结论：**MVP PRD 已冻结，可以进入开发**
-> 冻结编号：`MVP-PRD-v1.0-20260805`
+> 冻结编号：`MVP-PRD-v1.1-20260806`
 
 ## 1. 结论说明
 
@@ -92,7 +92,7 @@
 - 所有 P0、权限裁剪、并发 complete、不同幂等键支付测试通过。
 - Session 入口状态、路由守卫、同值旧版本重放、跨 Session 同键支付和支付未知状态重试通过。
 - Preview 环境完成免费与付费全流程 E2E。
-- Production smoke 通过，24 小时观察期无未处理 S0/S1。
+- Production smoke 通过，12 小时观察期无未处理 S0/S1。
 - README、API 示例、已付费演示 Session 和实际线上行为一致。
 
 ## 5. 已知非阻断项

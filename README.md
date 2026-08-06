@@ -295,8 +295,8 @@ Every PR and push to `main` runs:
 Deployment is deliberately separate from Serverless startup. Required order:
 
 1. Apply migrations to a temporary database and deploy the exact commit to Preview, with `APP_VERSION` set to its full commit SHA. Acceptance fails if `/api/health` reports any other version.
-2. Set `DEPLOYMENT_PREVIEW_URL`, `DEPLOYMENT_PRODUCTION_URL`, and later `DEPLOYMENT_PREVIEW_RUN_URL` as GitHub repository variables. Set `DEMO_REVIEW_CODE` in both GitHub Environments.
-3. Before this workflow reaches `main`, add the `deployment-preview` PR label to invoke its reusable Preview acceptance from the existing CI workflow. Record that successful same-commit Actions run URL in `DEPLOYMENT_PREVIEW_RUN_URL`.
+2. Set `DEPLOYMENT_PREVIEW_URL`, `DEPLOYMENT_PRODUCTION_URL`, and later `DEPLOYMENT_PREVIEW_RUN_URL` as GitHub repository variables. Set `DEMO_REVIEW_CODE` and `VERCEL_AUTOMATION_BYPASS_SECRET` in both GitHub Environments.
+3. Before this workflow reaches `main`, add the `deployment-preview` PR label to invoke the environment-scoped Preview acceptance job from the existing CI workflow. Record that successful same-commit Actions run URL in `DEPLOYMENT_PREVIEW_RUN_URL`.
 4. Only after Preview passes, apply the production migration using `DIRECT_URL`, promote the same commit, and add `deployment-production`. Production rejects evidence unless it is a successful same-repository, same-commit Preview acceptance run.
 5. Once the workflow is on `main`, `Deployment acceptance` can also be dispatched manually with the same inputs and verification rules.
 6. The smoke checks health, eight saves, complete, Free non-leakage, payment→Full, and paid Session exchange. Its output contains stages and aggregate check names only.
@@ -336,11 +336,11 @@ Rejected AI suggestions included a generic EAV questionnaire model (too flexible
 
 ## 16. Known limitations, monitoring, rollback, and future evolution
 
-Known limitations: anonymous Demo only; no self-service deletion; no consent/privacy-policy versioning; one calculation algorithm; one synchronous fake payment provider; no refunds; no production-scale load claim; free-tier/cold-start/connection limits must be measured after a provider is selected; and no Production URL exists in the current account context. Expected review load is ≤10 simultaneous visitors; only basic 20-Session concurrency smoke is in scope, not a formal load report.
+Known limitations: anonymous Demo only; no self-service deletion; no consent/privacy-policy versioning; one calculation algorithm; one synchronous fake payment provider; no refunds; no production-scale load claim; and Vercel/Supabase free-tier cold-start, connection, and capacity limits are not yet measured. Production is available at `https://health-demo-opal.vercel.app`, but Vercel Deployment Protection means browser reviewers need authorized Vercel access. Expected review load is ≤10 simultaneous visitors; only basic 20-Session concurrency smoke is in scope, not a formal load report.
 
 Release blockers: any S0 data/authorization leak; any S1 main flow/payment/recovery failure; migration failure; Free protected-field leak; coverage threshold failure; or critical E2E/smoke failure. During release, stop if `/api/health` fails three times, API 5xx exceeds 5% for five minutes, P95 remains >800 ms for ten minutes, or database connection errors cluster. Record request IDs and times, never credentials or health data.
 
-Rollback means switching to the last smoke-passed application deployment. Prefer additive migrations compatible with the previous app; if database repair is unavoidable, use a reviewed compensating migration—never production reset. Rebuild synthetic Demo data only with the versioned reset and rotate credentials. After rollback, repeat health, Free non-leakage, payment→Full, and paid Session checks. Observe for at least 24 hours or through review completion: twice in the first 30 minutes, then at 2 and 24 hours. Future work includes deletion/consent/privacy controls, real provider security, telemetry, accessible localization, and measured capacity planning.
+Rollback means switching to the last smoke-passed application deployment. Prefer additive migrations compatible with the previous app; if database repair is unavoidable, use a reviewed compensating migration—never production reset. Rebuild synthetic Demo data only with the versioned reset and rotate credentials. After rollback, repeat health, Free non-leakage, payment→Full, and paid Session checks. Observe for at least 12 hours or through review completion: twice in the first 30 minutes, then at 2 and 12 hours. Future work includes deletion/consent/privacy controls, real provider security, telemetry, accessible localization, and measured capacity planning.
 
 ## 17. 30+7 retention purge and operator record
 

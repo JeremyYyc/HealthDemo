@@ -1,7 +1,7 @@
 # MVP PRD 冻结清单
 
-> 冻结编号：`MVP-PRD-v1.0-20260805`  
-> 冻结日期：2026-08-05  
+> 冻结编号：`MVP-PRD-v1.1-20260806`
+> 冻结日期：2026-08-06
 > 状态：**Frozen**  
 > 适用范围：Personalized Health Assessment 三天 MVP
 
@@ -13,9 +13,11 @@
 
 ## 2. 冻结文件与 SHA-256
 
+v1.1 变更依据见 [`changes/2026-08-06-observation-window.md`](./changes/2026-08-06-observation-window.md)。未列为 v1.1 的文件内容保持 v1.0 不变。
+
 | 文件 | 版本 | SHA-256 |
 |---|---|---|
-| `README.md` | v1.0 | `f871ad07d8147e6bb5e1ddb17dc0fce802b7581fd4a37a82dd6dabbf3a8fc7c9` |
+| `README.md` | v1.1 | `ebc0f64081a7bbb1462c9a0e022a5c544793104fbf19e42e1f9346d9151ffe44` |
 | `01-master-prd.md` | v1.0 | `07277ba5698fcbad774ba7d4c3afe123a8f693789c04af826354fd409a98ab55` |
 | `02-funnel-and-screen-spec.md` | v1.0 | `7d8a97b2f37ca4af39c97f0bcbe8407bdeca6c89a3f3c77b9d092d19af56784c` |
 | `03-api-product-contract.md` | v1.0 | `a3b27c08ce913f3dd8f9410bc5905e8de312409c896d7d3b61a12ea3347fcc63` |
@@ -23,8 +25,8 @@
 | `05-health-calculation-spec.md` | v1.0 | `4f667d29f65a6ba7cdc8b12980bc3bb829a0f31400b57e1d0947f5b7cb023f5f` |
 | `06-subscription-and-payment-spec.md` | v1.0 | `ff00043bc1cfcabde6dfd2fa9573370f1e8c92d2891af7d7e058229280a42133` |
 | `07-quality-and-acceptance-plan.md` | v1.0 | `bf7993cb93236f20163747ae2288d8caf6e08e3ce76cf37ce9b04cfffe752a8b` |
-| `08-deployment-and-delivery-spec.md` | v1.0 | `d1ad5d37713f89a92fbefe69b916c1467e21a2d5e281e142a185a9413585067a` |
-| `09-prd-review-record.md` | v1.0 | `592e966cf2f825cda11dcc836835fc71aa64ee396424ec45267e2531a934eaca` |
+| `08-deployment-and-delivery-spec.md` | v1.1 | `bf356ba9114a4415978ee526bc9a6e166955bdbe97ef33eac569949847569e95` |
+| `09-prd-review-record.md` | v1.1 | `72f9fdbed9e1a0b5a3446017fc259acec3dc10cbaf6f04e9c1fbc9a45d4d3c71` |
 
 `10-mvp-freeze-manifest.md` 不记录自身哈希，避免自引用导致哈希不可收敛。
 

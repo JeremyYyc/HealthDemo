@@ -1,10 +1,10 @@
 # Health Assessment PRD 文档集
 
-> 状态：**MVP Frozen v1.0**（用户逻辑、异常处理与跨文档契约已冻结）  
-> 日期：2026-08-05  
+> 状态：**MVP Frozen v1.1**（用户逻辑、异常处理与跨文档契约已冻结）
+> 日期：2026-08-06
 > 项目：全栈开发 3 天挑战  
 > 产品暂定名：Personalized Health Assessment
-> 冻结编号：`MVP-PRD-v1.0-20260805`
+> 冻结编号：`MVP-PRD-v1.1-20260806`
 
 ## 1. 文档目的
 
@@ -28,6 +28,7 @@
 | [08-deployment-and-delivery-spec.md](./08-deployment-and-delivery-spec.md) | 公网部署、本地复现、README 和最终交付清单 | 开发、评审者 |
 | [09-prd-review-record.md](./09-prd-review-record.md) | PRD Review 清单逐项结论、证据、责任人与遗留项 | 全员 |
 | [10-mvp-freeze-manifest.md](./10-mvp-freeze-manifest.md) | 冻结范围、文件哈希、校验方式和解冻规则 | 全员 |
+| [changes/2026-08-06-observation-window.md](./changes/2026-08-06-observation-window.md) | 将交付观察窗口由 24 小时调整为 12 小时的批准记录 | 全员 |
 
 ## 3. 统一优先级
 
