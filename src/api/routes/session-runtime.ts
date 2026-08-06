@@ -5,8 +5,9 @@ import { AssessmentCompletionService } from "../../services/assessment-completio
 import { AssessmentResultService } from "../../services/assessment-result-service.js";
 import { DemoPaymentService } from "../../services/demo-payment-service.js";
 import { DemoExchangeService } from "../../services/demo-exchange-service.js";
+import { resolveAppBaseUrl } from "../runtime-config.js";
 
-export const appBaseUrl = process.env.APP_BASE_URL ?? "http://localhost:3000";
+export const appBaseUrl = resolveAppBaseUrl();
 
 function sessionRuntimeOptions() {
   const tokenSecret = process.env.SESSION_TOKEN_SECRET;
