@@ -29,6 +29,12 @@ describe("P0-12 delivery traceability", () => {
     expect(ciWorkflow).toContain("    environment: production\n");
     expect(ciWorkflow).toContain("SMOKE_REVIEW_CODE: ${{ secrets.DEMO_REVIEW_CODE }}");
     expect(ciWorkflow).toContain("SMOKE_VERCEL_PROTECTION_BYPASS: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}");
+    expect(ciWorkflow).not.toMatch(/^      SMOKE_REVIEW_CODE: \$\{\{ secrets\.DEMO_REVIEW_CODE \}\}/m);
+    expect(ciWorkflow.match(/          SMOKE_REVIEW_CODE: \$\{\{ secrets\.DEMO_REVIEW_CODE \}\}/g)).toHaveLength(2);
+    expect(ciWorkflow).toContain("test \"$(jq -r '.path' <<<\"$run_json\")\" = .github/workflows/ci.yml");
+    expect(ciWorkflow).toContain("test \"$(jq -r '.name' <<<\"$run_json\")\" = CI");
+    expect(ciWorkflow).toContain("test \"$(jq -r '.event' <<<\"$run_json\")\" = pull_request");
+    expect(ciWorkflow).toContain('select(.name == "deployment-preview-acceptance / preview-smoke")');
     expect(ciWorkflow).not.toContain("uses: ./.github/workflows/deployment-acceptance.yml");
     expect(deploymentWorkflow).toContain("  preview-smoke:\n");
     expect(deploymentWorkflow).toContain("    environment: preview\n");
