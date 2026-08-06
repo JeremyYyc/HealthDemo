@@ -6,6 +6,7 @@ const environment = process.env.SMOKE_ENVIRONMENT ?? "unspecified";
 const expectedCommitSha = process.env.SMOKE_EXPECTED_COMMIT_SHA;
 const reviewCode = process.env.SMOKE_REVIEW_CODE;
 const requireDemoExchange = process.env.SMOKE_REQUIRE_DEMO_EXCHANGE === "true";
+const vercelProtectionBypass = process.env.SMOKE_VERCEL_PROTECTION_BYPASS;
 const protectedFields = ["bmrKcal", "tdeeKcal", "recommendedCaloriesKcal", "estimatedWeeks", "targetDate", "calculationDate", "predictionCurve", "calorieFloorApplied"];
 
 class SmokeFailure extends Error {
@@ -28,7 +29,10 @@ function origin() {
 
 async function call(stage, path, options = {}, jar = { cookie: "" }) {
   const method = options.method ?? "GET";
-  const headers = { ...(jar.cookie ? { cookie: jar.cookie } : {}) };
+  const headers = {
+    ...deploymentProtectionHeaders(vercelProtectionBypass),
+    ...(jar.cookie ? { cookie: jar.cookie } : {}),
+  };
   if (method !== "GET") {
     headers["content-type"] = "application/json";
     headers.origin = origin();
@@ -57,6 +61,10 @@ function requireFields(stage, value, fields) {
 
 export function isExpectedDeploymentVersion(appVersion, expectedVersion) {
   return !expectedVersion || appVersion === expectedVersion;
+}
+
+export function deploymentProtectionHeaders(secret) {
+  return secret ? { "x-vercel-protection-bypass": secret } : {};
 }
 
 async function run() {

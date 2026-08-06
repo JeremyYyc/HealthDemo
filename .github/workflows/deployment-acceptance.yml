@@ -109,6 +109,7 @@ jobs:
       SMOKE_EXPECTED_COMMIT_SHA: ${{ inputs.commit_sha }}
       SMOKE_REVIEW_CODE: ${{ secrets.DEMO_REVIEW_CODE }}
       SMOKE_REQUIRE_DEMO_EXCHANGE: "true"
+      SMOKE_VERCEL_PROTECTION_BYPASS: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
     steps:
       - uses: actions/checkout@v4
         with:
