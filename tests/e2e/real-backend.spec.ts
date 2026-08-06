@@ -84,7 +84,9 @@ test("P0-04 real T05 guards late and result routes using the PostgreSQL-backed n
   await start(page);
   await choose(page, "Female");
   await choose(page, "Lose weight");
-  await page.getByLabel("Age in years").fill("25"); await page.getByRole("button", { name: "Continue" }).click();
+  await page.getByLabel("Age in years").fill("25");
+  await page.getByRole("button", { name: "Continue" }).click();
+  await expect(page).toHaveURL(/\/quiz\/height$/);
   await page.goto("/quiz/activity");
   await expect(page).toHaveURL(/\/quiz\/height$/);
   await page.goto("/result");
