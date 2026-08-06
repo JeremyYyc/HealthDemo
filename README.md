@@ -8,11 +8,11 @@ Core flow: `Session → eight saved steps → complete transaction → Free resu
 
 ## 2. Online URL, health check, and demo status
 
-- Production URL: **not provisioned in the current repository/account environment**.
-- Health check after deployment: `${APP_BASE_URL}/api/health`.
+- Production URL: `https://health-demo-opal.vercel.app` (`READY`; Vercel Deployment Protection requires authorized browser access).
+- Health check: `https://health-demo-opal.vercel.app/api/health`.
 - Release evidence: [final acceptance record](docs/delivery/final-acceptance.md).
 
-P0-12 is not externally complete until the same commit passes Preview first and then Production through the `Deployment acceptance` workflow. Do not substitute localhost results or a placeholder URL for that evidence.
+The deployed application SHA passed Preview first and then Production acceptance. P0-12 remains open until the 12-hour observation and final evidence review complete; localhost results or placeholder URLs are not substitutes for that evidence.
 
 ## 3. Technology stack and rationale
 
