@@ -54,6 +54,10 @@ jobs:
           TARGET_URL: ${{ inputs.target_url }}
           PREVIEW_RUN_URL: ${{ inputs.preview_run_url }}
         run: |
+          case "$TARGET_ENVIRONMENT" in
+            preview|production) ;;
+            *) echo "Environment must be preview or production" >&2; exit 1 ;;
+          esac
           case "$TARGET_URL" in
             https://*) ;;
             *) exit 1 ;;

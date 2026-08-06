@@ -28,6 +28,8 @@ describe("P0-12 delivery traceability", () => {
     expect(deploymentWorkflow).toContain("  production-smoke:\n");
     expect(deploymentWorkflow).toContain("    environment: production\n");
     expect(deploymentWorkflow).not.toContain("environment: ${{ inputs.environment }}");
+    expect(deploymentWorkflow).toContain("            preview|production) ;;\n");
+    expect(deploymentWorkflow).toContain('            *) echo "Environment must be preview or production" >&2; exit 1 ;;\n');
     expect(deploymentWorkflow).toContain("SMOKE_REVIEW_CODE: ${{ secrets.DEMO_REVIEW_CODE }}");
     expect(deploymentWorkflow).toContain("SMOKE_VERCEL_PROTECTION_BYPASS: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}");
     expect(ciWorkflow).not.toContain("secrets: inherit");
