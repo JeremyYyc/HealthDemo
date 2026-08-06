@@ -22,9 +22,14 @@ describe("P0-12 delivery traceability", () => {
     expect(deploymentWorkflow).toMatch(/permissions:\n(?:  .*\n)*  statuses: read\n/);
   });
 
-  it("declares only the two deployment Environment secret names", () => {
-    expect(deploymentWorkflow).toContain("    secrets:\n      DEMO_REVIEW_CODE:\n");
-    expect(deploymentWorkflow).toContain("      VERCEL_AUTOMATION_BYPASS_SECRET:\n");
+  it("binds deployment secrets through literal GitHub Environments", () => {
+    expect(deploymentWorkflow).toContain("  preview-smoke:\n");
+    expect(deploymentWorkflow).toContain("    environment: preview\n");
+    expect(deploymentWorkflow).toContain("  production-smoke:\n");
+    expect(deploymentWorkflow).toContain("    environment: production\n");
+    expect(deploymentWorkflow).not.toContain("environment: ${{ inputs.environment }}");
+    expect(deploymentWorkflow).toContain("SMOKE_REVIEW_CODE: ${{ secrets.DEMO_REVIEW_CODE }}");
+    expect(deploymentWorkflow).toContain("SMOKE_VERCEL_PROTECTION_BYPASS: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}");
     expect(ciWorkflow).not.toContain("secrets: inherit");
   });
 });

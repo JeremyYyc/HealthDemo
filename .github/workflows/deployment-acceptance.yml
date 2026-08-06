@@ -16,11 +16,6 @@ on:
       preview_run_url:
         required: true
         type: string
-    secrets:
-      DEMO_REVIEW_CODE:
-        required: false
-      VERCEL_AUTOMATION_BYPASS_SECRET:
-        required: false
   workflow_dispatch:
     inputs:
       environment:
@@ -113,13 +108,37 @@ jobs:
             --jq '.statuses[] | select(.context == "independent-agent-review") | .state' | head -n 1)
           test "$review_state" = success
 
-  smoke:
+  preview-smoke:
+    if: inputs.environment == 'preview'
     needs: validate-release-order
     runs-on: ubuntu-latest
-    environment: ${{ inputs.environment }}
+    environment: preview
     env:
       SMOKE_BASE_URL: ${{ inputs.target_url }}
-      SMOKE_ENVIRONMENT: ${{ inputs.environment }}
+      SMOKE_ENVIRONMENT: preview
+      SMOKE_EXPECTED_COMMIT_SHA: ${{ inputs.commit_sha }}
+      SMOKE_REVIEW_CODE: ${{ secrets.DEMO_REVIEW_CODE }}
+      SMOKE_REQUIRE_DEMO_EXCHANGE: "true"
+      SMOKE_VERCEL_PROTECTION_BYPASS: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.commit_sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run smoke:deployment
+
+  production-smoke:
+    if: inputs.environment == 'production'
+    needs: validate-release-order
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      SMOKE_BASE_URL: ${{ inputs.target_url }}
+      SMOKE_ENVIRONMENT: production
       SMOKE_EXPECTED_COMMIT_SHA: ${{ inputs.commit_sha }}
       SMOKE_REVIEW_CODE: ${{ secrets.DEMO_REVIEW_CODE }}
       SMOKE_REQUIRE_DEMO_EXCHANGE: "true"
