@@ -23,6 +23,13 @@ describe("P0-12 delivery traceability", () => {
   });
 
   it("binds deployment secrets through literal GitHub Environments", () => {
+    expect(ciWorkflow).toContain("    name: deployment-preview-acceptance / preview-smoke\n");
+    expect(ciWorkflow).toContain("    environment: preview\n");
+    expect(ciWorkflow).toContain("    name: deployment-production-acceptance / production-smoke\n");
+    expect(ciWorkflow).toContain("    environment: production\n");
+    expect(ciWorkflow).toContain("SMOKE_REVIEW_CODE: ${{ secrets.DEMO_REVIEW_CODE }}");
+    expect(ciWorkflow).toContain("SMOKE_VERCEL_PROTECTION_BYPASS: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}");
+    expect(ciWorkflow).not.toContain("uses: ./.github/workflows/deployment-acceptance.yml");
     expect(deploymentWorkflow).toContain("  preview-smoke:\n");
     expect(deploymentWorkflow).toContain("    environment: preview\n");
     expect(deploymentWorkflow).toContain("  production-smoke:\n");

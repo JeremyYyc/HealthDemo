@@ -190,18 +190,94 @@ jobs:
 
   deployment-preview-acceptance:
     if: github.event_name == 'pull_request' && github.event.action == 'labeled' && github.event.label.name == 'deployment-preview'
-    uses: ./.github/workflows/deployment-acceptance.yml
-    with:
-      environment: preview
-      target_url: ${{ vars.DEPLOYMENT_PREVIEW_URL }}
-      commit_sha: ${{ github.event.pull_request.head.sha }}
-      preview_run_url: N/A
+    name: deployment-preview-acceptance / preview-smoke
+    runs-on: ubuntu-latest
+    environment: preview
+    env:
+      SMOKE_BASE_URL: ${{ vars.DEPLOYMENT_PREVIEW_URL }}
+      SMOKE_ENVIRONMENT: preview
+      SMOKE_EXPECTED_COMMIT_SHA: ${{ github.event.pull_request.head.sha }}
+      SMOKE_REVIEW_CODE: ${{ secrets.DEMO_REVIEW_CODE }}
+      SMOKE_REQUIRE_DEMO_EXCHANGE: "true"
+      SMOKE_VERCEL_PROTECTION_BYPASS: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Require release gates
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEPLOYED_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          case "$SMOKE_BASE_URL" in
+            https://*) ;;
+            *) exit 1 ;;
+          esac
+          conclusion=$(gh api "repos/${GITHUB_REPOSITORY}/commits/${DEPLOYED_SHA}/check-runs" \
+            --jq '.check_runs[] | select(.name == "quality-gate") | .conclusion' | head -n 1)
+          test "$conclusion" = success
+          review_state=$(gh api "repos/${GITHUB_REPOSITORY}/commits/${DEPLOYED_SHA}/status" \
+            --jq '.statuses[] | select(.context == "independent-agent-review") | .state' | head -n 1)
+          test "$review_state" = success
+      - run: npm run smoke:deployment
 
   deployment-production-acceptance:
     if: github.event_name == 'pull_request' && github.event.action == 'labeled' && github.event.label.name == 'deployment-production'
-    uses: ./.github/workflows/deployment-acceptance.yml
-    with:
-      environment: production
-      target_url: ${{ vars.DEPLOYMENT_PRODUCTION_URL }}
-      commit_sha: ${{ github.event.pull_request.head.sha }}
-      preview_run_url: ${{ vars.DEPLOYMENT_PREVIEW_RUN_URL }}
+    name: deployment-production-acceptance / production-smoke
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      SMOKE_BASE_URL: ${{ vars.DEPLOYMENT_PRODUCTION_URL }}
+      SMOKE_ENVIRONMENT: production
+      SMOKE_EXPECTED_COMMIT_SHA: ${{ github.event.pull_request.head.sha }}
+      SMOKE_REVIEW_CODE: ${{ secrets.DEMO_REVIEW_CODE }}
+      SMOKE_REQUIRE_DEMO_EXCHANGE: "true"
+      SMOKE_VERCEL_PROTECTION_BYPASS: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+      PREVIEW_RUN_URL: ${{ vars.DEPLOYMENT_PREVIEW_RUN_URL }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Require Preview evidence and release gates
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEPLOYED_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          case "$SMOKE_BASE_URL" in
+            https://*) ;;
+            *) exit 1 ;;
+          esac
+          expected_prefix="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/"
+          case "$PREVIEW_RUN_URL" in
+            "${expected_prefix}"*) ;;
+            *) echo "Preview evidence must be an Actions run in ${GITHUB_REPOSITORY}" >&2; exit 1 ;;
+          esac
+          preview_run_id="${PREVIEW_RUN_URL#"$expected_prefix"}"
+          case "$preview_run_id" in
+            ""|*[!0-9]*) echo "Preview evidence must end with one numeric run ID" >&2; exit 1 ;;
+          esac
+          run_json=$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${preview_run_id}")
+          test "$(jq -r '.repository.full_name' <<<"$run_json")" = "$GITHUB_REPOSITORY"
+          test "$(jq -r '.conclusion' <<<"$run_json")" = success
+          test "$(jq -r '.head_sha' <<<"$run_json")" = "$DEPLOYED_SHA"
+          preview_job=$(gh api --paginate "repos/${GITHUB_REPOSITORY}/actions/runs/${preview_run_id}/jobs" \
+            --jq '.jobs[] | select(.name | startswith("deployment-preview-acceptance /")) | .conclusion' \
+            | head -n 1)
+          test "$preview_job" = success
+          conclusion=$(gh api "repos/${GITHUB_REPOSITORY}/commits/${DEPLOYED_SHA}/check-runs" \
+            --jq '.check_runs[] | select(.name == "quality-gate") | .conclusion' | head -n 1)
+          test "$conclusion" = success
+          review_state=$(gh api "repos/${GITHUB_REPOSITORY}/commits/${DEPLOYED_SHA}/status" \
+            --jq '.statuses[] | select(.context == "independent-agent-review") | .state' | head -n 1)
+          test "$review_state" = success
+      - run: npm run smoke:deployment
