@@ -29,6 +29,12 @@ function origin() {
 
 async function call(stage, path, options = {}, jar = { cookie: "" }) {
   const method = options.method ?? "GET";
+  let requestUrl;
+  try {
+    requestUrl = resolveSameOriginSmokeUrl(origin(), path);
+  } catch {
+    throw new SmokeFailure(`${stage}-origin`);
+  }
   const headers = {
     ...deploymentProtectionHeaders(vercelProtectionBypass),
     ...(jar.cookie ? { cookie: jar.cookie } : {}),
@@ -37,7 +43,7 @@ async function call(stage, path, options = {}, jar = { cookie: "" }) {
     headers["content-type"] = "application/json";
     headers.origin = origin();
   }
-  const response = await fetch(new URL(path, `${origin()}/`), {
+  const response = await fetch(requestUrl, {
     method,
     headers,
     ...(options.body === undefined ? {} : { body: JSON.stringify(options.body) }),
@@ -65,6 +71,12 @@ export function isExpectedDeploymentVersion(appVersion, expectedVersion) {
 
 export function deploymentProtectionHeaders(secret) {
   return secret ? { "x-vercel-protection-bypass": secret } : {};
+}
+
+export function resolveSameOriginSmokeUrl(deploymentOrigin, path) {
+  const resolved = new URL(path, `${deploymentOrigin}/`);
+  if (resolved.origin !== deploymentOrigin) throw new Error("Smoke target must stay on the deployment origin");
+  return resolved;
 }
 
 async function run() {

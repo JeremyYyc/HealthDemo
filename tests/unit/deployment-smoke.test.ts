@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   deploymentProtectionHeaders,
   isExpectedDeploymentVersion,
+  resolveSameOriginSmokeUrl,
 } from "../../scripts/smoke-deployment.mjs";
 
 describe("deployment smoke provenance", () => {
@@ -16,5 +17,15 @@ describe("deployment smoke provenance", () => {
     expect(deploymentProtectionHeaders("deployment-secret")).toEqual({
       "x-vercel-protection-bypass": "deployment-secret",
     });
+  });
+
+  it("rejects an absolute cross-origin URL before a protected request is built", () => {
+    const deploymentOrigin = "https://preview.example";
+    expect(resolveSameOriginSmokeUrl(deploymentOrigin, "/api/health").href).toBe(
+      "https://preview.example/api/health",
+    );
+    expect(() => resolveSameOriginSmokeUrl(deploymentOrigin, "https://attacker.example/collect")).toThrow(
+      "Smoke target must stay on the deployment origin",
+    );
   });
 });

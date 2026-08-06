@@ -195,7 +195,6 @@ jobs:
       target_url: ${{ vars.DEPLOYMENT_PREVIEW_URL }}
       commit_sha: ${{ github.event.pull_request.head.sha }}
       preview_run_url: N/A
-    secrets: inherit
 
   deployment-production-acceptance:
     if: github.event_name == 'pull_request' && github.event.action == 'labeled' && github.event.label.name == 'deployment-production'
@@ -205,4 +204,3 @@ jobs:
       target_url: ${{ vars.DEPLOYMENT_PRODUCTION_URL }}
       commit_sha: ${{ github.event.pull_request.head.sha }}
       preview_run_url: ${{ vars.DEPLOYMENT_PREVIEW_RUN_URL }}
-    secrets: inherit
