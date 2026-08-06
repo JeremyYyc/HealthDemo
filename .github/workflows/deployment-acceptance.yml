@@ -16,6 +16,11 @@ on:
       preview_run_url:
         required: true
         type: string
+    secrets:
+      DEMO_REVIEW_CODE:
+        required: false
+      VERCEL_AUTOMATION_BYPASS_SECRET:
+        required: false
   workflow_dispatch:
     inputs:
       environment:

@@ -21,4 +21,10 @@ describe("P0-12 delivery traceability", () => {
     expect(ciWorkflow).toMatch(/permissions:\n(?:  .*\n)*  statuses: read\n/);
     expect(deploymentWorkflow).toMatch(/permissions:\n(?:  .*\n)*  statuses: read\n/);
   });
+
+  it("declares only the two deployment Environment secret names", () => {
+    expect(deploymentWorkflow).toContain("    secrets:\n      DEMO_REVIEW_CODE:\n");
+    expect(deploymentWorkflow).toContain("      VERCEL_AUTOMATION_BYPASS_SECRET:\n");
+    expect(ciWorkflow).not.toContain("secrets: inherit");
+  });
 });
