@@ -25,7 +25,7 @@ const fixedNow = new Date("2026-08-05T23:59:59.900Z");
 
 beforeAll(() => {
   execFileSync("npx", ["prisma", "migrate", "deploy"], {
-    env: { ...process.env, DATABASE_URL: isolatedUrl.toString() },
+    env: { ...process.env, DATABASE_URL: isolatedUrl.toString(), DIRECT_URL: isolatedUrl.toString() },
     stdio: "pipe",
   });
 });
@@ -233,7 +233,7 @@ describe("P0-06 PostgreSQL completion transaction", () => {
     expect(await prisma.assessmentResult.count({ where: { assessmentId: stale.assessment.id } })).toBe(0);
 
     const racing = await setup();
-    let version = await fill(racing);
+    const version = await fill(racing);
     await prisma.assessment.update({ where: { id: racing.assessment.id }, data: { activityLevel: null } });
     const [saved, completed] = await Promise.all([
       save(racing, "activity", { activityLevel: "ACTIVE", version }),

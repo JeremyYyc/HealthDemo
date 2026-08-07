@@ -35,6 +35,8 @@ export default function GeneratingPage() {
     if (!session) return;
     if (session.assessment.status === "COMPLETED") { router.replace("/result"); return; }
     if (session.assessment.nextStep !== "COMPLETE") { router.replace(stepPath(session.assessment.nextStep)); return; }
+    // Completion is intentionally started once after the restored server state is renderable.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void complete();
   });
 

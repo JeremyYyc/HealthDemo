@@ -1,0 +1,159 @@
+name: Deployment acceptance
+run-name: Deployment acceptance / ${{ inputs.environment }} / ${{ inputs.commit_sha }}
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        required: true
+        type: string
+      target_url:
+        required: true
+        type: string
+      commit_sha:
+        required: true
+        type: string
+      preview_run_url:
+        required: true
+        type: string
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Target environment
+        required: true
+        type: choice
+        options: [preview, production]
+      target_url:
+        description: Exact HTTPS deployment origin
+        required: true
+        type: string
+      commit_sha:
+        description: Deployed commit SHA
+        required: true
+        type: string
+      preview_run_url:
+        description: Required production evidence; use N/A for preview
+        required: true
+        type: string
+
+permissions:
+  actions: read
+  contents: read
+  checks: read
+  statuses: read
+
+jobs:
+  validate-release-order:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require Preview evidence before Production
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEPLOYED_SHA: ${{ inputs.commit_sha }}
+          TARGET_ENVIRONMENT: ${{ inputs.environment }}
+          TARGET_URL: ${{ inputs.target_url }}
+          PREVIEW_RUN_URL: ${{ inputs.preview_run_url }}
+        run: |
+          case "$TARGET_ENVIRONMENT" in
+            preview|production) ;;
+            *) echo "Environment must be preview or production" >&2; exit 1 ;;
+          esac
+          case "$TARGET_URL" in
+            https://*) ;;
+            *) exit 1 ;;
+          esac
+          if [ "$TARGET_ENVIRONMENT" = production ]; then
+            test -n "$PREVIEW_RUN_URL"
+            test "$PREVIEW_RUN_URL" != N/A
+            expected_prefix="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/"
+            case "$PREVIEW_RUN_URL" in
+              "${expected_prefix}"*) ;;
+              *) echo "Preview evidence must be an Actions run in ${GITHUB_REPOSITORY}" >&2; exit 1 ;;
+            esac
+
+            preview_run_id="${PREVIEW_RUN_URL#"$expected_prefix"}"
+            case "$preview_run_id" in
+              ""|*[!0-9]*) echo "Preview evidence must end with one numeric run ID" >&2; exit 1 ;;
+            esac
+
+            run_json=$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${preview_run_id}")
+            test "$(jq -r '.repository.full_name' <<<"$run_json")" = "$GITHUB_REPOSITORY"
+            test "$(jq -r '.conclusion' <<<"$run_json")" = success
+            test "$(jq -r '.head_sha' <<<"$run_json")" = "$DEPLOYED_SHA"
+
+            workflow_name=$(jq -r '.name' <<<"$run_json")
+            run_title=$(jq -r '.display_title' <<<"$run_json")
+            if [ "$workflow_name" = "Deployment acceptance" ]; then
+              test "$run_title" = "Deployment acceptance / preview / ${DEPLOYED_SHA}"
+            elif [ "$workflow_name" = CI ] && [ "$(jq -r '.event' <<<"$run_json")" = pull_request ]; then
+              preview_job=$(gh api --paginate "repos/${GITHUB_REPOSITORY}/actions/runs/${preview_run_id}/jobs" \
+                --jq '.jobs[] | select(.name | startswith("deployment-preview-acceptance /")) | .conclusion' \
+                | head -n 1)
+              test "$preview_job" = success
+            else
+              echo "Run is not a successful Preview deployment acceptance" >&2
+              exit 1
+            fi
+          fi
+      - name: Require the deployed commit quality gate
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEPLOYED_SHA: ${{ inputs.commit_sha }}
+        run: |
+          conclusion=$(gh api "repos/${GITHUB_REPOSITORY}/commits/${DEPLOYED_SHA}/check-runs" \
+            --jq '.check_runs[] | select(.name == "quality-gate") | .conclusion' | head -n 1)
+          test "$conclusion" = success
+      - name: Require exact-head independent Agent approval
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEPLOYED_SHA: ${{ inputs.commit_sha }}
+        run: |
+          review_state=$(gh api "repos/${GITHUB_REPOSITORY}/commits/${DEPLOYED_SHA}/status" \
+            --jq '.statuses[] | select(.context == "independent-agent-review") | .state' | head -n 1)
+          test "$review_state" = success
+
+  preview-smoke:
+    if: inputs.environment == 'preview'
+    needs: validate-release-order
+    runs-on: ubuntu-latest
+    environment: preview
+    env:
+      SMOKE_BASE_URL: ${{ inputs.target_url }}
+      SMOKE_ENVIRONMENT: preview
+      SMOKE_EXPECTED_COMMIT_SHA: ${{ inputs.commit_sha }}
+      SMOKE_REVIEW_CODE: ${{ secrets.DEMO_REVIEW_CODE }}
+      SMOKE_REQUIRE_DEMO_EXCHANGE: "true"
+      SMOKE_VERCEL_PROTECTION_BYPASS: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.commit_sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run smoke:deployment
+
+  production-smoke:
+    if: inputs.environment == 'production'
+    needs: validate-release-order
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      SMOKE_BASE_URL: ${{ inputs.target_url }}
+      SMOKE_ENVIRONMENT: production
+      SMOKE_EXPECTED_COMMIT_SHA: ${{ inputs.commit_sha }}
+      SMOKE_REVIEW_CODE: ${{ secrets.DEMO_REVIEW_CODE }}
+      SMOKE_REQUIRE_DEMO_EXCHANGE: "true"
+      SMOKE_VERCEL_PROTECTION_BYPASS: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.commit_sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run smoke:deployment

@@ -24,7 +24,7 @@ const fixedNow = new Date("2026-08-05T12:00:00.000Z");
 
 beforeAll(() => {
   execFileSync("npx", ["prisma", "migrate", "deploy"], {
-    env: { ...process.env, DATABASE_URL: isolatedUrl.toString() },
+    env: { ...process.env, DATABASE_URL: isolatedUrl.toString(), DIRECT_URL: isolatedUrl.toString() },
     stdio: "pipe",
   });
 });

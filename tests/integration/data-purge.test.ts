@@ -14,7 +14,12 @@ const service = new DataPurgeService(prisma);
 const calculationTime = new Date("2026-08-05T12:00:00.000Z");
 const cutoffTime = new Date("2026-07-29T12:00:00.000Z");
 
-beforeAll(() => execFileSync("npx", ["prisma", "migrate", "deploy"], { env: { ...process.env, DATABASE_URL: isolatedUrl.toString() }, stdio: "pipe" }));
+beforeAll(() =>
+  execFileSync("npx", ["prisma", "migrate", "deploy"], {
+    env: { ...process.env, DATABASE_URL: isolatedUrl.toString(), DIRECT_URL: isolatedUrl.toString() },
+    stdio: "pipe",
+  }),
+);
 beforeEach(async () => {
   await prisma.subscription.deleteMany();
   await prisma.payment.deleteMany();
@@ -59,7 +64,9 @@ async function counts() {
 
 function runPurgeCommand(args: string[]) {
   const output = execFileSync("npm", ["run", "data:purge-expired", "--", ...args], {
-    cwd: process.cwd(), encoding: "utf8", env: { ...process.env, DATABASE_URL: isolatedUrl.toString() },
+    cwd: process.cwd(),
+    encoding: "utf8",
+    env: { ...process.env, DATABASE_URL: isolatedUrl.toString(), DIRECT_URL: isolatedUrl.toString() },
   });
   const auditLine = output.trim().split("\n").reverse().find((line) => line.startsWith("{"));
   if (!auditLine) throw new Error("Purge command did not emit an audit summary");

@@ -24,12 +24,6 @@ async function reachTargetWeight(page: Page) {
 }
 
 test("P0-04 real T01/T02 uses the session cookie, saves all steps, and restores from PostgreSQL", async ({ page, context }) => {
-  let assessmentId = "";
-  page.on("request", (request) => {
-    const match = new URL(request.url()).pathname.match(/^\/api\/assessments\/([^/]+)\/steps\//);
-    if (match) assessmentId = match[1]!;
-  });
-
   await reachTargetWeight(page);
   const cookies = await context.cookies();
   expect(cookies.find(({ name }) => name === "health_demo_session")).toMatchObject({ httpOnly: true, sameSite: "Lax" });
@@ -75,15 +69,28 @@ test("P0-04 real T04 distinguishes a first visit from a browser with a lost sess
   await expect(page.getByRole("heading", { name: "Your previous progress can’t be restored" })).toBeVisible();
 });
 
+test("P0-12-T04 losing an established Session Cookie enters the explicit recovery flow", async ({ page, context }) => {
+  await start(page);
+  await page.evaluate(() => localStorage.setItem("hasSeenSession", "true"));
+  await context.clearCookies();
+  await page.goto("/quiz/sex");
+  await expect(page).toHaveURL(/\/\?lost=1$/);
+  await expect(page.getByRole("heading", { name: "Your previous progress can’t be restored" })).toBeVisible();
+  await page.getByRole("button", { name: "Start a new assessment" }).click();
+  await expect(page.getByRole("heading", { name: "What is your age range?" })).toBeVisible();
+});
+
 test("P0-04 real T05 guards late and result routes using the PostgreSQL-backed nextStep", async ({ page }) => {
   await start(page);
   await choose(page, "Female");
   await choose(page, "Lose weight");
-  await page.getByLabel("Age in years").fill("25"); await page.getByRole("button", { name: "Continue" }).click();
-  await page.evaluate(() => window.location.assign("/quiz/activity"));
+  await page.getByLabel("Age in years").fill("25");
+  await page.getByRole("button", { name: "Continue" }).click();
   await expect(page).toHaveURL(/\/quiz\/height$/);
-  await page.evaluate(() => window.location.assign("/result"));
+  await page.goto("/quiz/activity");
   await expect(page).toHaveURL(/\/quiz\/height$/);
-  await page.evaluate(() => window.location.assign("/quiz/sex"));
+  await page.goto("/result");
+  await expect(page).toHaveURL(/\/quiz\/height$/);
+  await page.goto("/quiz/sex");
   await expect(page).toHaveURL(/\/quiz\/sex$/);
 });

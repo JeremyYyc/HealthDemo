@@ -26,7 +26,7 @@ const secondClient = createClient();
 
 beforeAll(() => {
   execFileSync("npx", ["prisma", "migrate", "deploy"], {
-    env: { ...process.env, DATABASE_URL: isolatedUrl.toString() },
+    env: { ...process.env, DATABASE_URL: isolatedUrl.toString(), DIRECT_URL: isolatedUrl.toString() },
     stdio: "pipe",
   });
 });
