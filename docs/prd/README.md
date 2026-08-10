@@ -29,6 +29,7 @@
 | [09-prd-review-record.md](./09-prd-review-record.md) | PRD Review 清单逐项结论、证据、责任人与遗留项 | 全员 |
 | [10-mvp-freeze-manifest.md](./10-mvp-freeze-manifest.md) | 冻结范围、文件哈希、校验方式和解冻规则 | 全员 |
 | [changes/2026-08-06-observation-window.md](./changes/2026-08-06-observation-window.md) | 将交付观察窗口由 24 小时调整为 12 小时的批准记录 | 全员 |
+| [changes/2026-08-10-readme-information-architecture.md](./changes/2026-08-10-readme-information-architecture.md) | 验收后将 README 细节拆分到版本化指南的批准记录 | 全员 |
 
 ## 3. 统一优先级
 
