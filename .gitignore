@@ -16,5 +16,6 @@ test-results/
 # Editor and local tooling
 .idea/
 .vscode/
+.vercel/
 *.log
 *.swp
